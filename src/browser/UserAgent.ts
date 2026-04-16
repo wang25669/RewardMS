@@ -44,11 +44,12 @@ export class UserAgentManager {
     async getChromeVersion(isMobile: boolean): Promise<string> {
         try {
             const request = {
-                url: 'https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json',
+                url: 'https://git.8998.dpdns.org/chrome-for-testing/last-known-good-versions.json',
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                timeout: 5000 // 增加超时限制，防止国内网络卡死
             }
 
             const response = await axios(request)
@@ -60,7 +61,8 @@ export class UserAgentManager {
                 'USERAGENT-CHROME-VERSION',
                 `An error occurred: ${error instanceof Error ? error.message : String(error)}`
             )
-            throw error
+            // Fallback to a known stable version if API fails
+            return '129.0.0.0'
         }
     }
 
@@ -71,7 +73,8 @@ export class UserAgentManager {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                timeout: 5000 // 增加超时限制
             }
 
             const response = await axios(request)
@@ -87,7 +90,8 @@ export class UserAgentManager {
                 'USERAGENT-EDGE-VERSION',
                 `An error occurred: ${error instanceof Error ? error.message : String(error)}`
             )
-            throw error
+            // Fallback to a known stable version if API fails
+            return { android: '129.0.2792.84', windows: '129.0.2792.60' }
         }
     }
 

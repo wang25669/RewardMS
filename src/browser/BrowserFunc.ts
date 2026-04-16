@@ -23,56 +23,74 @@ export default class BrowserFunc {
      */
     async getDashboardData(): Promise<DashboardData> {
         try {
-            const request: AxiosRequestConfig = {
+            // 根据当前上下文选择正确的 page（mobile 或 desktop）
+            const page = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
+            if (!page) throw new Error(`No ${this.bot.isMobile ? 'mobile' : 'desktop'} page available`)
+
+            // 确保在 dashboard 页面
+            await page.goto('https://rewards.bing.com/dashboard', {
+                waitUntil: 'networkidle',
+                timeout: 30000
+            }).catch(() => {})
+            await this.bot.utils.wait(3000)
+
+            // 获取 cookies
+            const cookies = await page.context().cookies()
+            
+            // 筛选相关 cookies
+            const relevantCookies = cookies.filter(c => {
+                if (!c.name || !c.value) return false
+                const name = c.name.toLowerCase()
+                return name.includes('msfpc') || 
+                       name.includes('muid') || 
+                       name.includes('anon') || 
+                       name.includes('rpsec') ||
+                       name.includes('estsa') ||
+                       name.includes('estuat') ||
+                       name.includes('msr') ||
+                       name.includes('_edge')
+            })
+
+            this.bot.logger.debug(this.bot.isMobile, 'GET-DASHBOARD-DATA', 
+                `Total cookies: ${cookies.length}, Relevant: ${relevantCookies.length}`)
+
+            // 构建 cookie 字符串
+            const cookieHeader = relevantCookies.map(c => `${c.name}=${c.value}`).join('; ')
+
+            // 使用 Axios 直接调用 API（带上 cookies）
+            const requestConfig: AxiosRequestConfig = {
                 url: 'https://rewards.bing.com/api/getuserinfo?type=1',
                 method: 'GET',
                 headers: {
-                    ...(this.bot.fingerprint?.headers ?? {}),
-                    Cookie: this.buildCookieHeader(this.bot.cookies.mobile, [
-                        'bing.com',
-                        'live.com',
-                        'microsoftonline.com'
-                    ]),
-                    Referer: 'https://rewards.bing.com/',
-                    Origin: 'https://rewards.bing.com'
+                    'Accept': 'application/json, text/plain, */*',
+                    'Cookie': cookieHeader,
+                    'Referer': 'https://rewards.bing.com/dashboard',
+                    'User-Agent': await page.evaluate(() => navigator.userAgent),
+                    'Origin': 'https://rewards.bing.com'
                 }
             }
 
-            const response = await this.bot.axios.request(request)
+            this.bot.logger.debug(this.bot.isMobile, 'GET-DASHBOARD-DATA', 
+                `Making API request with ${relevantCookies.length} cookies`)
 
-            if (response.data?.dashboard) {
-                return response.data.dashboard as DashboardData
+            const response = await this.bot.axios.request(requestConfig)
+            const data = response.data
+
+            if (data?.dashboard) {
+                this.bot.logger.info(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Successfully retrieved dashboard data')
+                return data.dashboard as DashboardData
             }
+
+            this.bot.logger.warn(this.bot.isMobile, 'GET-DASHBOARD-DATA', 
+                `No dashboard field. Response keys: ${Object.keys(data || {}).join(', ')}`)
             throw new Error('Dashboard data missing from API response')
         } catch (error) {
-            this.bot.logger.warn(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'API failed, trying HTML fallback')
-
-            // Try using script from dashboard page
-            try {
-                const request: AxiosRequestConfig = {
-                    url: this.bot.config.baseURL,
-                    method: 'GET',
-                    headers: {
-                        ...(this.bot.fingerprint?.headers ?? {}),
-                        Cookie: this.buildCookieHeader(this.bot.cookies.mobile),
-                        Referer: 'https://rewards.bing.com/',
-                        Origin: 'https://rewards.bing.com'
-                    }
-                }
-
-                const response = await this.bot.axios.request(request)
-                const match = response.data.match(/var\s+dashboard\s*=\s*({.*?});/s)
-
-                if (!match?.[1]) {
-                    throw new Error('Dashboard script not found in HTML')
-                }
-
-                return JSON.parse(match[1]) as DashboardData
-            } catch (fallbackError) {
-                // If both fail
-                this.bot.logger.error(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Failed to get dashboard data')
-                throw fallbackError
-            }
+            this.bot.logger.error(
+                this.bot.isMobile, 
+                'GET-DASHBOARD-DATA', 
+                `Failed: ${error instanceof Error ? error.message : String(error)}`
+            )
+            throw error
         }
     }
 
@@ -160,7 +178,20 @@ export default class BrowserFunc {
      */
     async getBrowserEarnablePoints(): Promise<BrowserEarnablePoints> {
         try {
-            const data = await this.getDashboardData()
+            let data: DashboardData
+            try {
+                data = await this.getDashboardData()
+            } catch (error) {
+                // Desktop API 不可用时返回默认值
+                this.bot.logger.debug(this.bot.isMobile, 'GET-BROWSER-EARNABLE-POINTS', 'Desktop API not available, returning default values')
+                return {
+                    dailySetPoints: 0,
+                    morePromotionsPoints: 0,
+                    desktopSearchPoints: 0,
+                    mobileSearchPoints: 0,
+                    totalEarnablePoints: 0
+                }
+            }
 
             const desktopSearchPoints =
                 data.userStatus.counters.pcSearch?.reduce(

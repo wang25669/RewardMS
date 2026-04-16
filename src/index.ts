@@ -384,41 +384,68 @@ export class MicrosoftRewardsBot {
                 this.cookies.mobile = await initialContext.cookies()
                 this.fingerprint = mobileSession.fingerprint
 
-                const data: DashboardData = await this.browser.func.getDashboardData()
-                const appData: AppDashboardData = await this.browser.func.getAppDashboardData()
-
-                // Set geo
-                this.userData.geoLocale =
-                    account.geoLocale === 'auto' ? data.userProfile.attributes.country : account.geoLocale.toLowerCase()
-                if (this.userData.geoLocale.length > 2) {
-                    this.logger.warn(
-                        'main',
-                        'GEO-LOCALE',
-                        `The provided geoLocale is longer than 2 (${this.userData.geoLocale} | auto=${account.geoLocale === 'auto'}), this is likely invalid and can cause errors!`
-                    )
+                // 尝试获取 Desktop Dashboard 数据（新 UI 可能失败）
+                let data: DashboardData | null = null
+                try {
+                    data = await this.browser.func.getDashboardData()
+                } catch (error) {
+                    this.logger.warn(this.isMobile, 'MAIN', 'Desktop dashboard API not available, using App dashboard as fallback')
                 }
 
-                this.userData.initialPoints = data.userStatus.availablePoints
-                this.userData.currentPoints = data.userStatus.availablePoints
+                const appData: AppDashboardData = await this.browser.func.getAppDashboardData()
+
+                // 设置语言代码 (优先使用 accounts.json 配置)
+                this.userData.langCode = (account.langCode || 'en').toLowerCase()
+
+                // 如果 Desktop API 失败，使用 App Dashboard 数据
+                if (!data) {
+                    // 从 App Dashboard 获取国家信息
+                    const appCountry = appData.response.profile.attributes.country || 'cn'
+                    this.userData.geoLocale = account.geoLocale === 'auto' ? appCountry.toLowerCase() : account.geoLocale.toLowerCase()
+                    this.userData.initialPoints = 0
+                    this.userData.currentPoints = 0
+                    this.logger.info(this.isMobile, 'GEO-LOCALE', `Using App Dashboard country: ${this.userData.geoLocale}`)
+                } else {
+                    // Set geo
+                    this.userData.geoLocale =
+                        account.geoLocale === 'auto' ? data.userProfile.attributes.country : account.geoLocale.toLowerCase()
+                    if (this.userData.geoLocale.length > 2) {
+                        this.logger.warn(
+                            'main',
+                            'GEO-LOCALE',
+                            `The provided geoLocale is longer than 2 (${this.userData.geoLocale} | auto=${account.geoLocale === 'auto'}), this is likely invalid and can cause errors!`
+                        )
+                    }
+
+                    this.userData.initialPoints = data.userStatus.availablePoints
+                    this.userData.currentPoints = data.userStatus.availablePoints
+                }
                 const initialPoints = this.userData.initialPoints ?? 0
 
                 const browserEarnable = await this.browser.func.getBrowserEarnablePoints()
                 const appEarnable = await this.browser.func.getAppEarnablePoints()
 
-                this.pointsCanCollect = browserEarnable.mobileSearchPoints + (appEarnable?.totalEarnablePoints ?? 0)
+                this.pointsCanCollect = (browserEarnable?.mobileSearchPoints ?? 0) + (appEarnable?.totalEarnablePoints ?? 0)
 
                 this.logger.info(
                     'main',
                     'POINTS',
                     `Earnable today | Mobile: ${this.pointsCanCollect} | Browser: ${
-                        browserEarnable.mobileSearchPoints
+                        browserEarnable?.mobileSearchPoints ?? 0
                     } | App: ${appEarnable?.totalEarnablePoints ?? 0} | ${accountEmail} | locale: ${this.userData.geoLocale}`
                 )
 
                 if (this.config.workers.doAppPromotions) await this.workers.doAppPromotions(appData)
-                if (this.config.workers.doDailySet) await this.workers.doDailySet(data, this.mainMobilePage)
-                if (this.config.workers.doSpecialPromotions) await this.workers.doSpecialPromotions(data)
-                if (this.config.workers.doMorePromotions) await this.workers.doMorePromotions(data, this.mainMobilePage)
+                
+                // Desktop Dashboard 相关任务（仅当 API 可用时执行）
+                if (data) {
+                    if (this.config.workers.doDailySet) await this.workers.doDailySet(data, this.mainMobilePage)
+                    if (this.config.workers.doSpecialPromotions) await this.workers.doSpecialPromotions(data)
+                    if (this.config.workers.doMorePromotions) await this.workers.doMorePromotions(data, this.mainMobilePage)
+                } else {
+                    this.logger.warn(this.isMobile, 'WORKERS', 'Skipping desktop tasks - Desktop Dashboard API not available')
+                }
+                
                 if (this.config.workers.doDailyCheckIn) await this.activities.doDailyCheckIn()
                 if (this.config.workers.doReadToEarn) await this.activities.doReadToEarn()
 
@@ -427,30 +454,39 @@ export class MicrosoftRewardsBot {
 
                 this.cookies.mobile = await initialContext.cookies()
 
-                const { mobilePoints, desktopPoints } = await this.searchManager.doSearches(
-                    data,
-                    missingSearchPoints,
-                    mobileSession,
-                    account,
-                    accountEmail
-                )
+                // 搜索任务也需要 data
+                if (data) {
+                    const { mobilePoints, desktopPoints } = await this.searchManager.doSearches(
+                        data,
+                        missingSearchPoints,
+                        mobileSession,
+                        account,
+                        accountEmail
+                    )
 
-                mobileContextClosed = true
+                    mobileContextClosed = true
 
-                this.userData.gainedPoints = mobilePoints + desktopPoints
+                    this.userData.gainedPoints = mobilePoints + desktopPoints
 
-                const finalPoints = await this.browser.func.getCurrentPoints()
-                const collectedPoints = finalPoints - initialPoints
+                    const finalPoints = await this.browser.func.getCurrentPoints()
+                    const collectedPoints = finalPoints - initialPoints
 
-                this.logger.info(
-                    'main',
-                    'FLOW',
-                    `Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | ${accountEmail}`
-                )
+                    this.logger.info(
+                        'main',
+                        'FLOW',
+                        `Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | ${accountEmail}`
+                    )
 
-                return {
-                    initialPoints,
-                    collectedPoints: collectedPoints || 0
+                    return {
+                        initialPoints,
+                        collectedPoints: collectedPoints || 0
+                    }
+                } else {
+                    this.logger.warn(this.isMobile, 'FLOW', 'Skipping search tasks - Desktop Dashboard API not available')
+                    return {
+                        initialPoints,
+                        collectedPoints: 0
+                    }
                 }
             })
         } finally {

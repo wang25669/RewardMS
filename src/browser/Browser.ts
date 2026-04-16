@@ -90,6 +90,21 @@ class Browser {
 
             context.setDefaultTimeout(this.bot.utils.stringToNumber(this.bot.config?.globalTimeout ?? 30000))
 
+            // 针对国内优化：屏蔽 Google 等被墙资源，防止页面加载卡死
+            await context.route('**/*', async (route, request) => {
+                const url = request.url()
+                if (
+                    url.includes('googleapis.com') ||
+                    url.includes('gstatic.com') ||
+                    url.includes('google-analytics.com') ||
+                    url.includes('doubleclick.net')
+                ) {
+                    await route.abort()
+                } else {
+                    await route.continue()
+                }
+            })
+
             await context.addCookies(sessionData.cookies)
 
             if (

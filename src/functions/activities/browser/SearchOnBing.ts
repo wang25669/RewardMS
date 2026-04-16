@@ -9,7 +9,7 @@ import { QueryCore } from '../../QueryEngine'
 import type { BasePromotion } from '../../../interface/DashboardData'
 
 export class SearchOnBing extends Workers {
-    private bingHome = 'https://bing.com'
+    private bingHome = 'https://cn.bing.com'
 
     private cookieHeader: string = ''
 

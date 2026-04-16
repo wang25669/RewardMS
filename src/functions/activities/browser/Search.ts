@@ -5,7 +5,7 @@ import { QueryCore } from '../../QueryEngine'
 import { Workers } from '../../Workers'
 
 export class Search extends Workers {
-    private bingHome = 'https://bing.com'
+    private bingHome = 'https://cn.bing.com'
     private searchPageURL = ''
     private searchCount = 0
 
@@ -48,7 +48,7 @@ export class Search extends Workers {
                 related: true,
                 langCode,
                 geoLocale: locale,
-                sourceOrder: ['google', 'wikipedia', 'reddit', 'local']
+                sourceOrder: ['baidu', 'local']
             })
 
             queries = [...new Set(queries.map(q => q.trim()).filter(Boolean))]

@@ -5,7 +5,15 @@ FROM node:24-slim AS builder
 
 WORKDIR /usr/src/microsoft-rewards-script
 
-ENV PLAYWRIGHT_BROWSERS_PATH=0
+ENV PLAYWRIGHT_BROWSERS_PATH=0 \
+    PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+
+# 使用国内 npm 镜像
+RUN npm config set registry https://registry.npmmirror.com
+
+# 配置 Debian 国内镜像源（针对 ARM 架构）
+RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|http://deb.debian.org|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list
 
 # Copy package files
 COPY package.json package-lock.json tsconfig.json ./
@@ -22,7 +30,8 @@ RUN rm -rf node_modules \
     && npm ci --omit=dev --ignore-scripts \
     && npm cache clean --force
 
-# Install Chromium Headless Shell, and cleanup
+# Install Chromium Headless Shell, and cleanup (使用国内镜像)
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 RUN npx patchright install --with-deps --only-shell chromium \
     && rm -rf /root/.cache /tmp/* /var/tmp/*
 
@@ -40,7 +49,10 @@ ENV NODE_ENV=production \
     FORCE_HEADLESS=1
 
 # Install minimal system libraries required for Chromium headless to run
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 使用国内 Debian 镜像源加速（针对 ARM 架构）
+RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|http://deb.debian.org|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
     cron \
     gettext-base \
     tzdata \

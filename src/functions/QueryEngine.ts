@@ -19,7 +19,7 @@ export class QueryCore {
     ): Promise<string[]> {
         const {
             shuffle = false,
-            sourceOrder = ['google', 'wikipedia', 'reddit', 'local'],
+            sourceOrder = ['baidu', 'local', 'wikipedia'],
             related = true,
             langCode = 'en',
             geoLocale = 'US'
@@ -35,12 +35,17 @@ export class QueryCore {
             const topicLists: string[][] = []
 
             const sourceHandlers: Record<
-                'google' | 'wikipedia' | 'reddit' | 'local',
+                'google' | 'wikipedia' | 'reddit' | 'local' | 'baidu',
                 (() => Promise<string[]>) | (() => string[])
             > = {
                 google: async () => {
                     const topics = await this.getGoogleTrends(geoLocale.toUpperCase()).catch(() => [])
                     this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `google: ${topics.length}`)
+                    return topics
+                },
+                baidu: async () => {
+                    const topics = await this.getBaiduHotSearch().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `baidu: ${topics.length}`)
                     return topics
                 },
                 wikipedia: async () => {
@@ -241,6 +246,64 @@ export class QueryCore {
         }
 
         return queryTerms.flatMap(x => [x.topic, ...x.related])
+    }
+
+    async getBaiduHotSearch(): Promise<string[]> {
+        const hotSearchTerms: string[] = []
+
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://top.baidu.com/board?tab=realtime',
+                method: 'GET',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Referer': 'https://www.baidu.com/'
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const html = response.data
+
+            // 从 HTML 中提取热搜词条
+            // 百度热搜的数据存储在 script 标签的 JSON 中
+            const jsonMatch = html.match(/"card":\s*\[.*?"content":\s*"([^"]*)"/g)
+            
+            if (jsonMatch) {
+                for (const match of jsonMatch) {
+                    const contentMatch = match.match(/"content":\s*"([^"]*)"/)
+                    if (contentMatch && contentMatch[1]) {
+                        hotSearchTerms.push(contentMatch[1])
+                    }
+                }
+            }
+
+            // 备用方案：使用正则表达式直接提取
+            if (hotSearchTerms.length === 0) {
+                const titleMatches = html.match(/<div[^>]*class="c-single-text-ellipsis"[^>]*>([^<]+)<\/div>/g)
+                if (titleMatches) {
+                    for (const match of titleMatches) {
+                        const titleMatch = match.match(/>([^<]+)</)
+                        if (titleMatch && titleMatch[1]) {
+                            hotSearchTerms.push(titleMatch[1].trim())
+                        }
+                    }
+                }
+            }
+
+            this.bot.logger.debug(this.bot.isMobile, 'SEARCH-BAIDU', `extracted ${hotSearchTerms.length} terms`)
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-BAIDU',
+                `request failed: ${
+                    error instanceof Error ? `${error.name}: ${error.message}\n${error.stack ?? ''}` : String(error)
+                }`
+            )
+            return []
+        }
+
+        return hotSearchTerms
     }
 
     private extractJsonFromResponse(text: string): GoogleTrendsResponse[1] | null {
