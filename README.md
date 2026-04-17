@@ -1,4 +1,4 @@
-[![Discord](https://img.shields.io/badge/Join%20Our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/8BxYbV4pkj)
+本仓库基于https://github.com/TheNetsky/Microsoft-Rewards-Script
 
 > [!CAUTION]
 > V3.x does not support the new Bing Rewards interface!
@@ -27,7 +27,7 @@ Works on Windows, Linux, macOS, and WSL.
 ### Get the script
 
 ```bash
-git clone https://github.com/TheNetsky/Microsoft-Rewards-Script.git
+git clone https://github.com/wang25669/RewardMS.git
 cd Microsoft-Rewards-Script
 ```
 
