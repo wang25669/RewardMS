@@ -35,7 +35,11 @@ export class UserAgentManager {
             platformVersion,
             architecture: isMobile ? '' : 'x86',
             bitness: isMobile ? '' : '64',
-            model: ''
+            model: '',
+            // 设置中文语言和时区
+            language: 'zh-CN',
+            languages: ['zh-CN', 'zh', 'en-US'],
+            timeZone: 'Asia/Shanghai'
         }
 
         return { userAgent: uaTemplate, userAgentMetadata: uaMetadata }
@@ -145,6 +149,14 @@ export class UserAgentManager {
                 `"Microsoft Edge";v="${componentData.edge_major_version}", "Not=A?Brand";v="${componentData.not_a_brand_major_version}", "Chromium";v="${componentData.chrome_major_version}"`
             fingerprint.headers['sec-ch-ua-full-version-list'] =
                 `"Microsoft Edge";v="${componentData.edge_version}", "Not=A?Brand";v="${componentData.not_a_brand_version}", "Chromium";v="${componentData.chrome_version}"`
+            // 设置中文语言头
+            fingerprint.headers['accept-language'] = 'zh-CN,zh;q=0.9,en;q=0.8'
+            fingerprint.headers['accept-encoding'] = 'gzip, deflate, br, zstd'
+            fingerprint.headers['sec-fetch-site'] = 'same-site'
+            fingerprint.headers['sec-fetch-mode'] = 'navigate'
+            fingerprint.headers['sec-fetch-user'] = '?1'
+            fingerprint.headers['sec-fetch-dest'] = 'document'
+            fingerprint.headers['upgrade-insecure-requests'] = '1'
 
             /*
             Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 EdgA/129.0.0.0

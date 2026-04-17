@@ -35,7 +35,12 @@ class Browser {
         '--disable-user-media-security=true',
         '--disable-blink-features=Attestation',
         '--disable-features=WebAuthentication,PasswordManagerOnboarding,PasswordManager,EnablePasswordsAccountStorage,Passkeys',
-        '--disable-save-password-bubble'
+        '--disable-save-password-bubble',
+        // 设置时区为亚洲/上海（UTC+8）
+        '--timezone=Asia/Shanghai',
+        // 设置默认语言为中文
+        '--lang=zh-CN',
+        '--accept-lang=zh-CN,zh;q=0.9,en;q=0.8'
     ] as const
 
     constructor(bot: MicrosoftRewardsBot) {

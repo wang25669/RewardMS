@@ -187,7 +187,7 @@ export class SearchOnBing extends Workers {
             const formData = new URLSearchParams({
                 id: promotion.offerId,
                 hash: promotion.hash,
-                timeZone: '60',
+                timeZone: '480', // 中国时区 UTC+8（分钟表示）
                 activityAmount: '1',
                 dbs: '0',
                 form: '',

@@ -16,11 +16,24 @@ export class Workers {
         this.bot = bot
     }
 
+    /**
+     * 执行每日任务（Daily Set）
+     * 添加了详细的调试日志来追踪任务处理过程
+     */
     public async doDailySet(data: DashboardData, page: Page) {
         const todayKey = this.bot.utils.getFormattedDate()
         const todayData = data.dailySetPromotions[todayKey]
 
+        // 添加调试日志：显示找到的Daily Set任务数量
+        this.bot.logger.debug(this.bot.isMobile, 'DAILY-SET',
+            `Daily Set data: ${todayData ? `found ${todayData.length} tasks` : 'no tasks found'}`)
+
+        // 过滤未完成的任务：未完成且可获得积分大于0
         const activitiesUncompleted = todayData?.filter(x => !x.complete && x.pointProgressMax > 0) ?? []
+
+        // 添加调试日志：显示未完成的任务列表
+        this.bot.logger.debug(this.bot.isMobile, 'DAILY-SET',
+            `Uncompleted tasks: ${activitiesUncompleted.map(a => a.title).join(', ')}`)
 
         if (!activitiesUncompleted.length) {
             this.bot.logger.info(this.bot.isMobile, 'DAILY-SET', 'All "Daily Set" items have already been completed')
@@ -28,6 +41,12 @@ export class Workers {
         }
 
         this.bot.logger.info(this.bot.isMobile, 'DAILY-SET', 'Started solving "Daily Set" items')
+
+        // 添加每个任务的详细日志，包括任务标题、类型和ID
+        for (const activity of activitiesUncompleted) {
+            this.bot.logger.debug(this.bot.isMobile, 'DAILY-SET-TASK',
+                `Processing task: "${activity.title}" | type: ${activity.promotionType} | offerId: ${activity.offerId}`)
+        }
 
         await this.solveActivities(activitiesUncompleted, page)
 
@@ -179,6 +198,13 @@ export class Workers {
                 const name = activity.name?.toLowerCase() ?? ''
                 const offerId = (activity as BasePromotion).offerId
                 const destinationUrl = activity.destinationUrl?.toLowerCase() ?? ''
+
+                // 添加调试日志：显示每个任务的过滤条件检查结果
+                this.bot.logger.debug(
+                    this.bot.isMobile,
+                    'ACTIVITY-FILTER',
+                    `Checking task: "${activity.title}" | complete: ${activity.complete} | pointProgressMax: ${activity.pointProgressMax} | type: ${type}`
+                )
 
                 this.bot.logger.debug(
                     this.bot.isMobile,

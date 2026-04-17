@@ -350,11 +350,30 @@ export class Search extends Workers {
                     break
                 }
 
+                // 添加错误日志：搜索失败时记录详细信息
                 this.bot.logger.error(
                     isMobile,
                     'SEARCH-BING',
                     `Search attempt failed | attempt=${i + 1}/${maxAttempts} | query="${query}" | message=${error instanceof Error ? error.message : String(error)}`
                 )
+
+                // 添加调试日志：显示搜索错误的上下文信息
+                this.bot.logger.debug(
+                    isMobile,
+                    'SEARCH-BING-DETAIL',
+                    `Search error details: current page=${searchPage.url()}, searchCount=${this.searchCount}, refreshThreshold=10`
+                )
+
+                // 重试前先导航到首页，确保页面状态正确
+                this.bot.logger.info(
+                    isMobile,
+                    'SEARCH-BING',
+                    `Navigating to Bing home before retry | attempt=${i + 1}/${maxAttempts}`
+                )
+
+                await searchPage.goto(this.bingHome)
+                await searchPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+                await this.bot.browser.utils.tryDismissAllMessages(searchPage)
 
                 this.bot.logger.warn(
                     isMobile,

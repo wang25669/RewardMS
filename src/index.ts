@@ -468,8 +468,8 @@ export class MicrosoftRewardsBot {
 
                     this.userData.gainedPoints = mobilePoints + desktopPoints
 
-                    const finalPoints = await this.browser.func.getCurrentPoints()
-                    const collectedPoints = finalPoints - initialPoints
+                    // Mobile session 可能已关闭，直接用搜索获得的积分计算
+                    const collectedPoints = mobilePoints + desktopPoints
 
                     this.logger.info(
                         'main',

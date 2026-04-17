@@ -24,7 +24,7 @@ export class UrlReward extends Workers {
                 const page = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
                 if (page) {
                     const dashboardUrl = 'https://rewards.bing.com/dashboard'
-                    
+
                     // 1. 确保在 Dashboard 页面
                     if (!page.url().includes('rewards.bing.com/dashboard')) {
                         this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD', 'Navigating to Dashboard...')
@@ -36,17 +36,17 @@ export class UrlReward extends Workers {
                     // 2. 尝试查找并点击对应的任务卡片（使用标题定位）
                     // promotion.title 是从 Dashboard API 获取到的真实标题 (例如 "钟楼奇观？")
                     this.bot.logger.info(this.bot.isMobile, 'URL-REWARD', `Attempting to click card: "${promotion.title}"`)
-                    
+
                     const target = page.getByText(promotion.title, { exact: false }).first()
                     const isVisible = await target.isVisible({ timeout: 5000 }).catch(() => false)
-                    
+
                     if (isVisible) {
                         this.bot.logger.info(this.bot.isMobile, 'URL-REWARD', `Found card! Clicking to trigger activity...`)
                         await target.click()
-                        
+
                         // 3. 等待网络请求完成 (捕获点击后触发的隐形 API 调用)
                         await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
-                        
+
                         // 4. 额外等待确保后端记录
                         await this.bot.utils.wait(this.bot.utils.randomDelay(4000, 7000))
 
@@ -70,13 +70,16 @@ export class UrlReward extends Workers {
             return
         }
 
+        // 添加详细日志：在开始处理UrlReward任务前记录任务详情
+        this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD-DETAIL',
+            `Task details: title="${promotion.title}" | offerId=${promotion.offerId} | type=${promotion.promotionType}`)
+
         const offerId = promotion.offerId
 
         this.bot.logger.info(
             this.bot.isMobile,
             'URL-REWARD',
-            `Starting UrlReward | offerId=${offerId} | geo=${this.bot.userData.geoLocale} | oldBalance=${this.oldBalance}`
-        )
+            `Starting UrlReward | offerId=${offerId} | geo=${this.bot.userData.geoLocale} | oldBalance=${this.oldBalance}`)
 
         try {
             this.cookieHeader = this.bot.browser.func.buildCookieHeader(
