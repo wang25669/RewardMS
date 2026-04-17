@@ -28,7 +28,7 @@ Works on Windows, Linux, macOS, and WSL.
 
 ```bash
 git clone https://github.com/wang25669/RewardMS.git
-cd Microsoft-Rewards-Script
+cd RewardMS
 ```
 
 Or, download the latest release ZIP and extract it.
