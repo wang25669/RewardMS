@@ -24,40 +24,40 @@ export class UrlReward extends Workers {
                 const page = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
                 if (page) {
                     const dashboardUrl = 'https://rewards.bing.com/dashboard'
+                    const earnUrl = 'https://rewards.bing.com/earn'
 
-                    // 1. 确保在 Dashboard 页面
+                    // 1. 先确保我们在 Dashboard 首页寻找 Daily Set 任务
                     if (!page.url().includes('rewards.bing.com/dashboard')) {
                         this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD', 'Navigating to Dashboard...')
-                        await page.goto(dashboardUrl, { waitUntil: 'domcontentloaded', timeout: 20000 })
-                        // 等待 React 渲染 (等待用户卡片出现)
-                        await page.waitForSelector('#user-card', { timeout: 10000 }).catch(() => {})
+                        await page.goto(dashboardUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
                     }
 
-                    // 2. 尝试查找并点击对应的任务卡片（使用标题定位）
-                    // promotion.title 是从 Dashboard API 获取到的真实标题 (例如 "钟楼奇观？")
                     this.bot.logger.info(this.bot.isMobile, 'URL-REWARD', `Attempting to click card: "${promotion.title}"`)
 
-                    const target = page.getByText(promotion.title, { exact: false }).first()
-                    const isVisible = await target.isVisible({ timeout: 5000 }).catch(() => false)
+                    let target = page.getByText(promotion.title, { exact: false }).first()
+                    let isVisible = await target.isVisible({ timeout: 5000 }).catch(() => false)
+
+                    // 2. 如果 Dashboard 找不到，尝试 Earn 页面
+                    if (!isVisible) {
+                        this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD', `Card not found on Dashboard, trying Earn page...`)
+                        await page.goto(earnUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
+                        target = page.getByText(promotion.title, { exact: false }).first()
+                        isVisible = await target.isVisible({ timeout: 5000 }).catch(() => false)
+                    }
 
                     if (isVisible) {
                         this.bot.logger.info(this.bot.isMobile, 'URL-REWARD', `Found card! Clicking to trigger activity...`)
                         await target.click()
 
-                        // 3. 等待网络请求完成 (捕获点击后触发的隐形 API 调用)
                         await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
-
-                        // 4. 额外等待确保后端记录
                         await this.bot.utils.wait(this.bot.utils.randomDelay(4000, 7000))
 
-                        // 5. 无论跳转到哪里，都回到 Dashboard
                         if (!page.url().includes('rewards.bing.com/dashboard')) {
                             this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD', 'Returning to Dashboard...')
                             await page.goto(dashboardUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {})
                         }
                     } else {
                         this.bot.logger.warn(this.bot.isMobile, 'URL-REWARD', `Card "${promotion.title}" not found. Trying destination URL.`)
-                        // 备选方案：访问链接
                         if (promotion.destinationUrl) {
                             await page.goto(promotion.destinationUrl, { waitUntil: 'networkidle', timeout: 20000 }).catch(() => {})
                             await this.bot.utils.wait(5000)
@@ -84,10 +84,10 @@ export class UrlReward extends Workers {
         try {
             this.cookieHeader = this.bot.browser.func.buildCookieHeader(
                 this.bot.isMobile ? this.bot.cookies.mobile : this.bot.cookies.desktop, [
-                    'bing.com',
-                    'live.com',
-                    'microsoftonline.com'
-                ]
+                'bing.com',
+                'live.com',
+                'microsoftonline.com'
+            ]
             )
 
             const fingerprintHeaders = { ...this.bot.fingerprint.headers }

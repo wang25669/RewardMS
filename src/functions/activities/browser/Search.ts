@@ -60,7 +60,7 @@ export class Search extends Workers {
             this.bot.logger.debug(isMobile, 'SEARCH-BING', `Navigating to search page | url=${targetUrl}`)
 
             await page.goto(targetUrl)
-            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => { })
             await this.bot.browser.utils.tryDismissAllMessages(page)
 
             let stagnantLoop = 0
@@ -277,7 +277,7 @@ export class Search extends Workers {
             this.bot.logger.debug(isMobile, 'SEARCH-BING', `Returning home to refresh state | url=${this.bingHome}`)
 
             await searchPage.goto(this.bingHome)
-            await searchPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+            await searchPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => { })
             await this.bot.browser.utils.tryDismissAllMessages(searchPage)
         }
 
@@ -297,7 +297,19 @@ export class Search extends Workers {
                 })
 
                 await searchPage.keyboard.press('Home')
-                await searchBox.waitFor({ state: 'visible', timeout: 15000 })
+                
+                try {
+                    await searchBox.waitFor({ state: 'visible', timeout: 15000 })
+                } catch (timeoutError) {
+                    this.bot.logger.warn(
+                        isMobile, 
+                        'SEARCH-BING', 
+                        `Search box timeout, attempting to dismiss popups...`
+                    )
+                    await this.bot.browser.utils.tryDismissAllMessages(searchPage)
+                    await this.bot.utils.wait(this.bot.utils.randomDelay(2000, 4000))
+                    await searchBox.waitFor({ state: 'visible', timeout: 5000 })
+                }
 
                 await this.bot.utils.wait(1000)
                 await this.bot.browser.utils.ghostClick(searchPage, searchBar, { clickCount: 3 })
@@ -372,7 +384,7 @@ export class Search extends Workers {
                 )
 
                 await searchPage.goto(this.bingHome)
-                await searchPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+                await searchPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => { })
                 await this.bot.browser.utils.tryDismissAllMessages(searchPage)
 
                 this.bot.logger.warn(
