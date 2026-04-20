@@ -26,55 +26,17 @@ export class DailyCheckIn extends Workers {
         )
 
         try {
-            // Try type 101 first
-            this.bot.logger.debug(this.bot.isMobile, 'DAILY-CHECK-IN', 'Attempting Daily Check-In | type=101')
-
-            let response = await this.submitDaily(101) // Try using 101 (EU Variant?)
-            this.bot.logger.debug(
-                this.bot.isMobile,
-                'DAILY-CHECK-IN',
-                `Received Daily Check-In response | type=101 | status=${response?.status ?? 'unknown'}`
-            )
-
-            let newBalance = Number(response?.data?.response?.balance ?? this.oldBalance)
-            this.gainedPoints = newBalance - this.oldBalance
-
-            this.bot.logger.debug(
-                this.bot.isMobile,
-                'DAILY-CHECK-IN',
-                `Balance delta after Daily Check-In | type=101 | oldBalance=${this.oldBalance} | newBalance=${newBalance} | gainedPoints=${this.gainedPoints}`
-            )
-
-            if (this.gainedPoints > 0) {
-                this.bot.userData.currentPoints = newBalance
-                this.bot.userData.gainedPoints = (this.bot.userData.gainedPoints ?? 0) + this.gainedPoints
-
-                this.bot.logger.info(
-                    this.bot.isMobile,
-                    'DAILY-CHECK-IN',
-                    `Completed Daily Check-In | type=101 | gainedPoints=${this.gainedPoints} | oldBalance=${this.oldBalance} | newBalance=${newBalance}`,
-                    'green'
-                )
-                return
-            }
-
-            this.bot.logger.debug(
-                this.bot.isMobile,
-                'DAILY-CHECK-IN',
-                `No points gained with type=101 | oldBalance=${this.oldBalance} | newBalance=${newBalance} | retryingWithType=103`
-            )
-
-            // Fallback to type 103
+            // 以 mitmproxy 抓包为准，中国区签到 type=103
             this.bot.logger.debug(this.bot.isMobile, 'DAILY-CHECK-IN', 'Attempting Daily Check-In | type=103')
 
-            response = await this.submitDaily(103) // Try using 103 (USA Variant?)
+            const response = await this.submitDaily()
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'DAILY-CHECK-IN',
                 `Received Daily Check-In response | type=103 | status=${response?.status ?? 'unknown'}`
             )
 
-            newBalance = Number(response?.data?.response?.balance ?? this.oldBalance)
+            const newBalance = Number(response?.data?.response?.balance ?? this.oldBalance)
             this.gainedPoints = newBalance - this.oldBalance
 
             this.bot.logger.debug(
@@ -97,7 +59,7 @@ export class DailyCheckIn extends Workers {
                 this.bot.logger.warn(
                     this.bot.isMobile,
                     'DAILY-CHECK-IN',
-                    `Daily Check-In completed but no points gained | typesTried=101,103 | oldBalance=${this.oldBalance} | finalBalance=${newBalance}`
+                    `Daily Check-In completed but no points gained (may already be checked in today) | oldBalance=${this.oldBalance} | finalBalance=${newBalance}`
                 )
             }
         } catch (error) {
@@ -109,35 +71,39 @@ export class DailyCheckIn extends Workers {
         }
     }
 
-    private async submitDaily(type: number) {
+    private async submitDaily() {
         try {
+            // 请求体与 mitmproxy 抓包完全一致
             const jsonData = {
-                id: randomUUID(),
                 amount: 1,
-                type: type,
-                attributes: {
-                    offerid: 'Gamification_Sapphire_DailyCheckIn'
-                },
-                country: this.bot.userData.geoLocale
+                attributes: {},
+                id: randomUUID(),
+                type: 103,
+                country: 'cn',
+                risk_context: {},
+                channel: 'SAAndroid'
             }
 
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'DAILY-CHECK-IN',
-                `Preparing Daily Check-In payload | type=${type} | id=${jsonData.id} | amount=${jsonData.amount} | country=${jsonData.country}`
+                `Preparing Daily Check-In payload | type=103 | id=${jsonData.id} | amount=${jsonData.amount} | country=${jsonData.country}`
             )
 
+            // 请求头与 mitmproxy 抓包对齐（Android BingSapphire）
             const request: AxiosRequestConfig = {
                 url: 'https://prod.rewardsplatform.microsoft.com/dapi/me/activities',
                 method: 'POST',
                 headers: {
-                    Authorization: `Bearer ${this.bot.accessToken}`,
-                    'User-Agent':
-                        'Bing/32.5.431027001 (com.microsoft.bing; build:431027001; iOS 17.6.1) Alamofire/5.10.2',
-                    'Content-Type': 'application/json',
-                    'X-Rewards-Country': this.bot.userData.geoLocale,
-                    'X-Rewards-Language': 'en',
-                    'X-Rewards-ismobile': 'true'
+                    'authorization': `Bearer ${this.bot.accessToken}`,
+                    'x-rewards-partnerid': 'startapp',
+                    'x-rewards-appid': 'SAAndroid/31.1.2110003554',
+                    'x-rewards-ismobile': 'true',
+                    'x-rewards-country': 'cn',
+                    'x-rewards-language': 'zh',
+                    'x-rewards-flights': 'rwgobig',
+                    'user-agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UQ1A.240205.002; ) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.82 Mobile Safari/537.36 BingSapphire/31.1.2110003554',
+                    'content-type': 'application/json; charset=utf-8',
                 },
                 data: JSON.stringify(jsonData)
             }
@@ -145,7 +111,7 @@ export class DailyCheckIn extends Workers {
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'DAILY-CHECK-IN',
-                `Sending Daily Check-In request | type=${type} | url=${request.url}`
+                `Sending Daily Check-In request | type=103 | url=${request.url}`
             )
 
             return this.bot.axios.request(request)
@@ -153,7 +119,7 @@ export class DailyCheckIn extends Workers {
             this.bot.logger.error(
                 this.bot.isMobile,
                 'DAILY-CHECK-IN',
-                `Error in submitDaily | type=${type} | message=${error instanceof Error ? error.message : String(error)}`
+                `Error in submitDaily | type=103 | message=${error instanceof Error ? error.message : String(error)}`
             )
             throw error
         }

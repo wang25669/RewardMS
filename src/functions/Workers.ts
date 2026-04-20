@@ -236,7 +236,7 @@ export class Workers {
                             `Found activity type "Quiz" | title="${activity.title}" | offerId=${offerId}`
                         )
 
-                        await this.bot.activities.doQuiz(basePromotion)
+                        await this.bot.activities.doQuiz(basePromotion, page)
                         break
                     }
 

@@ -143,6 +143,17 @@ export class UserAgentManager {
                 `${fingerprint.fingerprint.navigator.appCodeName}/`,
                 ''
             )
+            
+            // 修复浏览器指纹与 UA 的矛盾
+            if (isMobile) {
+                fingerprint.fingerprint.navigator.platform = 'Linux armv81'
+                fingerprint.fingerprint.navigator.deviceMemory = 4
+                fingerprint.fingerprint.navigator.hardwareConcurrency = 8
+            } else {
+                fingerprint.fingerprint.navigator.platform = 'Win32'
+                fingerprint.fingerprint.navigator.deviceMemory = 8
+                fingerprint.fingerprint.navigator.hardwareConcurrency = 16
+            }
 
             fingerprint.headers['user-agent'] = userAgentData.userAgent
             fingerprint.headers['sec-ch-ua'] =

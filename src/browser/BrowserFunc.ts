@@ -27,15 +27,9 @@ export default class BrowserFunc {
             const page = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
             if (!page) throw new Error(`No ${this.bot.isMobile ? 'mobile' : 'desktop'} page available`)
 
-            // 确保在 dashboard 页面
-            await page.goto('https://rewards.bing.com/dashboard', {
-                waitUntil: 'networkidle',
-                timeout: 30000
-            }).catch(() => {})
-            await this.bot.utils.wait(3000)
-
-            // 获取 cookies
-            const cookies = await page.context().cookies()
+            // 直接从 context 获取 cookies，不导航当前页面
+            // 避免将搜索页面劫持到 dashboard 导致搜索超时
+            const cookies = await page.context().cookies('https://rewards.bing.com')
             
             // 筛选相关 cookies
             const relevantCookies = cookies.filter(c => {

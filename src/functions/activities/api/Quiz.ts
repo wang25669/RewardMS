@@ -1,4 +1,5 @@
 import type { AxiosRequestConfig } from 'axios'
+import type { Page } from 'patchright'
 import type { BasePromotion } from '../../../interface/DashboardData'
 import { Workers } from '../../Workers'
 
@@ -11,7 +12,7 @@ export class Quiz extends Workers {
 
     private oldBalance: number = this.bot.userData.currentPoints
 
-    async doQuiz(promotion: BasePromotion) {
+    async doQuiz(promotion: BasePromotion, page?: Page) {
         const offerId = promotion.offerId
         this.oldBalance = Number(this.bot.userData.currentPoints ?? 0)
         const startBalance = this.oldBalance
@@ -23,6 +24,83 @@ export class Quiz extends Workers {
         )
 
         try {
+            if (page && promotion.destinationUrl) {
+                this.bot.logger.info(this.bot.isMobile, 'QUIZ', `Simulating UI Quiz interaction | url=${promotion.destinationUrl}`)
+                await page.goto(promotion.destinationUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
+                await this.bot.utils.wait(3000)
+
+                let totalGained = 0
+                let attempts = 0
+                const maxAttempts = 20
+                let noGainedCounter = 0
+
+                for (let i = 0; i < maxAttempts; i++) {
+                    const quizOptions = await page.$$('.b_cards .b_card button, [data-option], .wk_choicesInstContainer .wk_choiceCard')
+                    if (quizOptions.length > 0) {
+                        const randomIndex = Math.floor(Math.random() * quizOptions.length)
+                        this.bot.logger.debug(this.bot.isMobile, 'QUIZ', `Found ${quizOptions.length} quiz options, clicking randomly`)
+                        
+                        try {
+                            const option = quizOptions[randomIndex]
+                            if (option) {
+                                await option.click()
+                                await this.bot.utils.wait(3000)
+                            }
+                        } catch (e) {
+                            this.bot.logger.debug(this.bot.isMobile, 'QUIZ', `Error clicking quiz option: ${e}`)
+                        }
+
+                        const newBalance = await this.bot.browser.func.getCurrentPoints()
+                        const gainedPoints = newBalance - this.oldBalance
+
+                        attempts = i + 1
+
+                        if (gainedPoints > 0) {
+                            this.bot.userData.currentPoints = newBalance
+                            this.bot.userData.gainedPoints = (this.bot.userData.gainedPoints ?? 0) + gainedPoints
+                            this.oldBalance = newBalance
+                            totalGained += gainedPoints
+                            this.gainedPoints += gainedPoints
+                            noGainedCounter = 0
+                            this.bot.logger.info(this.bot.isMobile, 'QUIZ', `Quiz interaction ${i + 1} | gainedPoints=${gainedPoints} | newBalance=${newBalance}`, 'green')
+                            
+                            // Check if we've reached the max points for this quiz
+                            if (totalGained >= promotion.pointProgressMax) {
+                                this.bot.logger.info(this.bot.isMobile, 'QUIZ', `Reached max points for quiz (${promotion.pointProgressMax}), ending.`)
+                                break
+                            }
+                        } else {
+                            noGainedCounter++
+                            this.bot.logger.debug(this.bot.isMobile, 'QUIZ', `Quiz interaction ${i + 1} | no points gained yet | noGainedCounter=${noGainedCounter}`)
+                            if (noGainedCounter >= 8) { // If clicked 8 times and no points, assume quiz is done or stuck
+                                this.bot.logger.warn(this.bot.isMobile, 'QUIZ', `No points gained after multiple interactions, assuming quiz is complete or stuck.`)
+                                break
+                            }
+                        }
+                    } else {
+                        // Sometimes there's an overlay or 'Start playing' button
+                        const startBtn = await page.$('#rqStartQuiz')
+                        if (startBtn) {
+                            this.bot.logger.debug(this.bot.isMobile, 'QUIZ', `Found start quiz button, clicking`)
+                            await startBtn.click().catch(() => {})
+                            await this.bot.utils.wait(2000)
+                        } else {
+                            this.bot.logger.debug(this.bot.isMobile, 'QUIZ', `No quiz options found, waiting...`)
+                            await this.bot.utils.wait(2000)
+                            noGainedCounter++
+                            if (noGainedCounter >= 8) break
+                        }
+                    }
+                }
+                
+                this.bot.logger.info(
+                    this.bot.isMobile,
+                    'QUIZ',
+                    `Completed the quiz via UI | offerId=${offerId} | attempts=${attempts} | totalGained=${totalGained} | startBalance=${startBalance} | finalBalance=${this.bot.userData.currentPoints}`
+                )
+                
+                return // Skip API logic
+            }
             this.cookieHeader = this.bot.browser.func.buildCookieHeader(
                 this.bot.isMobile ? this.bot.cookies.mobile : this.bot.cookies.desktop, [
                     'bing.com',

@@ -52,13 +52,15 @@ export class ReadToEarn extends Workers {
                     url: 'https://prod.rewardsplatform.microsoft.com/dapi/me/activities',
                     method: 'POST',
                     headers: {
-                        Authorization: `Bearer ${this.bot.accessToken}`,
-                        'User-Agent':
-                            'Bing/32.5.431027001 (com.microsoft.bing; build:431027001; iOS 17.6.1) Alamofire/5.10.2',
-                        'Content-Type': 'application/json',
-                        'X-Rewards-Country': this.bot.userData.geoLocale,
-                        'X-Rewards-Language': 'en',
-                        'X-Rewards-ismobile': 'true'
+                        'authorization': `Bearer ${this.bot.accessToken}`,
+                        'x-rewards-partnerid': 'startapp',
+                        'x-rewards-appid': 'SAAndroid/31.1.2110003554',
+                        'x-rewards-ismobile': 'true',
+                        'x-rewards-country': 'cn',
+                        'x-rewards-language': 'zh',
+                        'x-rewards-flights': 'rwgobig',
+                        'user-agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UQ1A.240205.002; ) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.82 Mobile Safari/537.36 BingSapphire/31.1.2110003554',
+                        'content-type': 'application/json; charset=utf-8',
                     },
                     data: JSON.stringify(jsonData)
                 }

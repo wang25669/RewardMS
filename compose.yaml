@@ -13,7 +13,7 @@ services:
         environment:
             TZ: 'Asia/Shanghai' # Set your timezone for proper scheduling
             NODE_ENV: 'production'
-            CRON_SCHEDULE: '31 8 * * *' # Customize your schedule, use crontab.guru for formatting
+            CRON_SCHEDULE: '31 7 * * *' # Customize your schedule, use crontab.guru for formatting
             RUN_ON_START: 'true' # Runs the script immediately on container startup
 
             # Add a small random delay to the scheduled start time (uncomment to customize delay, or disable)

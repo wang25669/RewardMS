@@ -21,7 +21,7 @@
     "searchSettings": {
         "scrollRandomResults": true,
         "clickRandomResults": true,
-        "parallelSearching": true,
+        "parallelSearching": false,
         "queryEngines": ["baidu","local"],
         "searchResultVisitTime": "30sec",
         "searchDelay": {
