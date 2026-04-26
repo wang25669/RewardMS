@@ -402,8 +402,9 @@ export class MicrosoftRewardsBot {
                     // 从 App Dashboard 获取国家信息
                     const appCountry = appData.response.profile.attributes.country || 'cn'
                     this.userData.geoLocale = account.geoLocale === 'auto' ? appCountry.toLowerCase() : account.geoLocale.toLowerCase()
-                    this.userData.initialPoints = 0
-                    this.userData.currentPoints = 0
+                    const appBalance = Number(appData.response.balance ?? 0)                    
+                    this.userData.initialPoints = appBalance
+                    this.userData.currentPoints = appBalance
                     this.logger.info(this.isMobile, 'GEO-LOCALE', `Using App Dashboard country: ${this.userData.geoLocale}`)
                 } else {
                     // Set geo
@@ -417,8 +418,9 @@ export class MicrosoftRewardsBot {
                         )
                     }
 
-                    this.userData.initialPoints = data.userStatus.availablePoints
-                    this.userData.currentPoints = data.userStatus.availablePoints
+                    const desktopBalance = Number(data.userStatus.availablePoints ?? 0)
+                    this.userData.initialPoints = desktopBalance
+                    this.userData.currentPoints = desktopBalance
                 }
                 const initialPoints = this.userData.initialPoints ?? 0
 
@@ -466,15 +468,20 @@ export class MicrosoftRewardsBot {
 
                     mobileContextClosed = true
 
-                    this.userData.gainedPoints = mobilePoints + desktopPoints
+                    //this.userData.gainedPoints = mobilePoints + desktopPoints
 
                     // Mobile session 可能已关闭，直接用搜索获得的积分计算
-                    const collectedPoints = mobilePoints + desktopPoints
+                    //const collectedPoints = mobilePoints + desktopPoints
+
+                    const finalPoints = Number(this.userData.currentPoints ?? initialPoints)
+                    const collectedPoints = Math.max(0, finalPoints - initialPoints)
+                    this.userData.gainedPoints = collectedPoints
 
                     this.logger.info(
                         'main',
                         'FLOW',
-                        `Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | ${accountEmail}`
+                        //`Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | ${accountEmail}`
+                        `Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | Old: ${initialPoints} → New: ${finalPoints} | ${accountEmail}`
                     )
 
                     return {
@@ -483,9 +490,12 @@ export class MicrosoftRewardsBot {
                     }
                 } else {
                     this.logger.warn(this.isMobile, 'FLOW', 'Skipping search tasks - Desktop Dashboard API not available')
+                    const finalPoints = Number(this.userData.currentPoints ?? initialPoints)
+                    const collectedPoints = Math.max(0, finalPoints - initialPoints)
+                    this.userData.gainedPoints = collectedPoints
                     return {
                         initialPoints,
-                        collectedPoints: 0
+                        collectedPoints
                     }
                 }
             })
