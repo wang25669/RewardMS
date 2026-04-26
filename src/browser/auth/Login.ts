@@ -87,6 +87,7 @@ export class Login {
             let iteration = 0
             let previousState: LoginState = 'UNKNOWN'
             let sameStateCount = 0
+            let forcedToLoginPage = false
 
             while (iteration < maxIterations) {
                 if (page.isClosed()) throw new Error('Page closed unexpectedly')
@@ -95,6 +96,35 @@ export class Login {
                 this.bot.logger.debug(this.bot.isMobile, 'LOGIN', `State check iteration ${iteration}/${maxIterations}`)
 
                 const state = await this.detectCurrentState(page, account)
+                if (!forcedToLoginPage && state === 'UNKNOWN') {
+    const u = new URL(page.url())
+    if (u.hostname === 'rewards.bing.com' && u.pathname === '/welcome') {
+        forcedToLoginPage = true
+        this.bot.logger.warn(this.bot.isMobile, 'LOGIN', 'At /welcome, trying one-time click on Sign in')
+
+        const signInSelectors = [
+            'a[data-bi-id*="sign"]',
+            'a[id*="sign" i]',
+            'a:has-text("Sign in")',
+            'a:has-text("登录")',
+            'button:has-text("Sign in")',
+            'button:has-text("登录")'
+        ]
+
+        let clicked = false
+        for (const sel of signInSelectors) {
+            if (await this.bot.browser.utils.ghostClick(page, sel)) { clicked = true; break }
+        }
+
+        if (!clicked) this.bot.logger.warn(this.bot.isMobile, 'LOGIN', 'Sign in button not found on /welcome')
+        await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => { })
+        await this.bot.utils.wait(1200)
+        continue
+    }
+}        
+
+
+
                 this.bot.logger.debug(this.bot.isMobile, 'LOGIN', `Current state: ${state}`)
 
                 if (state !== previousState && previousState !== 'UNKNOWN') {
@@ -142,7 +172,8 @@ export class Login {
                 throw new Error('Login timeout: exceeded maximum iterations')
             }
 
-            await this.finalizeLogin(page, account.email)
+            //await this.finalizeLogin(page, account.email)
+            await this.finalizeLogin(page, account)
         } catch (error) {
             this.bot.logger.error(
                 this.bot.isMobile,
@@ -170,9 +201,23 @@ export class Login {
             return 'ACCOUNT_LOCKED'
         }
 
+        /*
         if (url.hostname === 'rewards.bing.com' || url.hostname === 'account.microsoft.com') {
             this.bot.logger.debug(this.bot.isMobile, 'DETECT-STATE', 'On rewards/account page, assuming logged in')
             return 'LOGGED_IN'
+        }
+        */
+        const isRewardsLoggedInPath =
+            url.hostname === 'rewards.bing.com' &&
+            (url.pathname === '/' || url.pathname.includes('/dashboard'))
+
+        if (isRewardsLoggedInPath || url.hostname === 'account.microsoft.com') {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'DETECT-STATE',
+                `On verified rewards/account page, assuming logged in (${url.hostname}${url.pathname})`
+           )
+           return 'LOGGED_IN'
         }
 
         const stateChecks: Array<[string, LoginState]> = [
@@ -229,19 +274,27 @@ export class Login {
         }
 
         if (foundStates.includes('ERROR_ALERT')) {
-            this.bot.logger.debug(
-                this.bot.isMobile,
-                'DETECT-STATE',
-                `ERROR_ALERT found - hostname: ${url.hostname}, has 2FA: ${foundStates.includes('2FA_TOTP')}`
-            )
-            if (url.hostname !== 'login.live.com') {
-                foundStates = foundStates.filter(s => s !== 'ERROR_ALERT')
-            }
-            if (foundStates.includes('2FA_TOTP')) {
-                foundStates = foundStates.filter(s => s !== 'ERROR_ALERT')
-            }
-            if (foundStates.includes('ERROR_ALERT')) return 'ERROR_ALERT'
-        }
+    this.bot.logger.debug(
+        this.bot.isMobile,
+        'DETECT-STATE',
+        `ERROR_ALERT found - hostname: ${url.hostname}, has 2FA: ${foundStates.includes('2FA_TOTP')}`
+    )
+
+    if (url.hostname !== 'login.live.com' || foundStates.includes('2FA_TOTP')) {
+        foundStates = foundStates.filter(s => s !== 'ERROR_ALERT')
+    }
+
+    if (foundStates.length === 0) {
+        this.bot.logger.debug(
+            this.bot.isMobile,
+            'DETECT-STATE',
+            'ERROR_ALERT filtered out and no other state remains; fallback to UNKNOWN'
+        )
+        return 'UNKNOWN'
+    }
+
+    if (foundStates.includes('ERROR_ALERT')) return 'ERROR_ALERT'
+}
 
         const priorities: LoginState[] = [
             'ACCOUNT_LOCKED',
@@ -553,7 +606,7 @@ export class Login {
         }
     }
 
-    private async finalizeLogin(page: Page, email: string) {
+    private async finalizeLogin(page: Page, account: Account) {
         this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Finalizing login')
 
         await page.goto(this.bot.config.baseURL, { waitUntil: 'networkidle', timeout: 10000 }).catch(() => { })
@@ -566,7 +619,7 @@ export class Login {
         }
 
         this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Starting Bing session verification')
-        await this.verifyBingSession(page)
+        await this.verifyBingSession(page, account)
 
         this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Starting rewards session verification')
         await this.getRewardsSession(page)
@@ -574,12 +627,12 @@ export class Login {
         const browser = page.context()
         const cookies = await browser.cookies()
         this.bot.logger.debug(this.bot.isMobile, 'LOGIN', `Retrieved ${cookies.length} cookies`)
-        await saveSessionData(this.bot.config.sessionPath, cookies, email, this.bot.isMobile)
+        await saveSessionData(this.bot.config.sessionPath, cookies, account.email, this.bot.isMobile)
 
         this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Login completed, session saved')
     }
 
-    async verifyBingSession(page: Page) {
+    async verifyBingSession(page: Page, account: Account) {
         const url =
             'https://www.bing.com/fd/auth/signin?action=interactive&provider=windows_live_id&return_url=https%3A%2F%2Fwww.bing.com%2F'
         const loopMax = 5
@@ -595,6 +648,31 @@ export class Login {
                 this.bot.logger.debug(this.bot.isMobile, 'LOGIN-BING', `Verification loop ${i + 1}/${loopMax}`)
 
                 const state = await this.detectCurrentState(page)
+                const actionableStates: LoginState[] = [
+    'EMAIL_INPUT',
+    'PASSWORD_INPUT',
+    'SIGN_IN_ANOTHER_WAY',
+    'SIGN_IN_ANOTHER_WAY_EMAIL',
+    'OTP_CODE_ENTRY',
+    'GET_A_CODE',
+    'GET_A_CODE_2',
+    'RECOVERY_EMAIL_INPUT',
+    '2FA_TOTP',
+    'KMSI_PROMPT',
+    'PASSKEY_VIDEO',
+    'PASSKEY_ERROR',
+    'LOGIN_PASSWORDLESS'
+]
+
+if (actionableStates.includes(state)) {
+    this.bot.logger.info(this.bot.isMobile, 'LOGIN-BING', `Handling actionable state during verify: ${state}`)
+    const ok = await this.handleState(state, page, account)
+    if (!ok) {
+        this.bot.logger.warn(this.bot.isMobile, 'LOGIN-BING', `State handler returned false: ${state}`)
+    }
+}
+
+
                 if (state === 'PASSKEY_ERROR') {
                     this.bot.logger.info(this.bot.isMobile, 'LOGIN-BING', 'Dismissing Passkey error state')
                     await this.bot.browser.utils.ghostClick(page, this.selectors.secondaryButton)
