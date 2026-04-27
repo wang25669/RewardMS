@@ -1,5 +1,7 @@
 本仓库基于https://github.com/TheNetsky/Microsoft-Rewards-Script
 
+Index this repository
+
 > [!CAUTION]
 > V3.x does not support the new Bing Rewards interface!
 > 
