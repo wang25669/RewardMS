@@ -58,6 +58,11 @@
             "tags": ["bot", "notify"],
             "priority": 3
         },
+        "serverChan": {
+            "enabled": false,
+            "sendKey": "",
+            "title": "Microsoft Rewards 每日汇总"
+        },
         "webhookLogFilter": {
             "enabled": false,
             "mode": "whitelist",

@@ -2,9 +2,8 @@
 
 > [!CAUTION]
 > V3.x does not support the new Bing Rewards interface!
-> 
+>
 > Use at your own risk — some features may not work as expected.
-
 
 ---
 
@@ -106,7 +105,7 @@ Edit `src/config.json` to customize behavior. Below are all currently available 
 | `workers.doDailySet`          | boolean | `true`  | Complete daily set          |
 | `workers.doSpecialPromotions` | boolean | `true`  | Complete special promotions |
 | `workers.doMorePromotions`    | boolean | `true`  | Complete more promotions    |
-| `workers.doPunchCards`        | boolean | `true`  | Complete punchcards  (WIP)       |
+| `workers.doPunchCards`        | boolean | `true`  | Complete punchcards (WIP)   |
 | `workers.doAppPromotions`     | boolean | `true`  | Complete app promotions     |
 | `workers.doDesktopSearch`     | boolean | `true`  | Perform desktop searches    |
 | `workers.doMobileSearch`      | boolean | `true`  | Perform mobile searches     |
@@ -157,6 +156,9 @@ Edit `src/config.json` to customize behavior. Below are all currently available 
 | `webhook.ntfy.title`                     | string   | `"Microsoft-Rewards-Script"`                         | Notification title                |
 | `webhook.ntfy.tags`                      | string[] | `["bot", "notify"]`                                  | Notification tags                 |
 | `webhook.ntfy.priority`                  | number   | `3`                                                  | Notification priority (1-5)       |
+| `webhook.serverChan.enabled`             | boolean  | `false`                                              | Enable ServerChan daily summary   |
+| `webhook.serverChan.sendKey`             | string   | `""`                                                 | ServerChan SendKey                |
+| `webhook.serverChan.title`               | string   | `"Microsoft Rewards \u6bcf\u65e5\u6c47\u603b"`       | Daily summary title               |
 | `webhook.webhookLogFilter.enabled`       | boolean  | `false`                                              | Enable webhook log filtering      |
 | `webhook.webhookLogFilter.mode`          | string   | `"whitelist"`                                        | Filter mode (whitelist/blacklist) |
 | `webhook.webhookLogFilter.levels`        | string[] | `["error"]`                                          | Log levels to send                |
@@ -167,6 +169,7 @@ Edit `src/config.json` to customize behavior. Below are all currently available 
 > **NTFY** users set the `webhookLogFilter` to `enabled`, or you will receive push notifications for _all_ logs.
 > When enabled, only account start, 2FA codes, and account completion summaries are delivered as push notifcations.
 > Customize which notifications you receive with the `keywords` options.
+> **ServerChan** sends one daily account summary after all accounts finish. Get your SendKey from the ServerChan dashboard.
 
 ---
 

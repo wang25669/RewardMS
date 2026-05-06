@@ -23,6 +23,7 @@ import type { Account } from './interface/Account'
 import AxiosClient from './util/Axios'
 import { sendDiscord, flushDiscordQueue } from './logging/Discord'
 import { sendNtfy, flushNtfyQueue } from './logging/Ntfy'
+import { sendServerChan, flushServerChanQueue } from './logging/ServerChan'
 import type { DashboardData } from './interface/DashboardData'
 import type { AppDashboardData } from './interface/AppDashBoardData'
 
@@ -41,6 +42,8 @@ interface AccountStats {
     initialPoints: number
     finalPoints: number
     collectedPoints: number
+    startedAt: string
+    endedAt: string
     duration: number
     success: boolean
     error?: string
@@ -57,7 +60,69 @@ export function getCurrentContext(): ExecutionContext {
 }
 
 async function flushAllWebhooks(timeoutMs = 5000): Promise<void> {
-    await Promise.allSettled([flushDiscordQueue(timeoutMs), flushNtfyQueue(timeoutMs)])
+    await Promise.allSettled([flushDiscordQueue(timeoutMs), flushNtfyQueue(timeoutMs), flushServerChanQueue(timeoutMs)])
+}
+
+function formatTime(timestamp: number): string {
+    return new Date(timestamp).toLocaleTimeString(undefined, {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    })
+}
+
+function createAccountStats(
+    email: string,
+    startedAtMs: number,
+    initialPoints: number,
+    collectedPoints: number,
+    success: boolean,
+    error?: string
+): AccountStats {
+    const endedAtMs = Date.now()
+    const finalPoints = initialPoints + collectedPoints
+
+    return {
+        email,
+        initialPoints,
+        finalPoints,
+        collectedPoints,
+        startedAt: formatTime(startedAtMs),
+        endedAt: formatTime(endedAtMs),
+        duration: parseFloat(((endedAtMs - startedAtMs) / 1000).toFixed(1)),
+        success,
+        error
+    }
+}
+
+function formatDailyAccountSummary(stats: AccountStats[], runStartTime: number): string {
+    const totalCollectedPoints = stats.reduce((sum, s) => sum + s.collectedPoints, 0)
+    const successCount = stats.filter(s => s.success).length
+    const failedCount = stats.length - successCount
+    const totalDurationMinutes = ((Date.now() - runStartTime) / 1000 / 60).toFixed(1)
+
+    const lines = [
+        'Microsoft Rewards \u6bcf\u65e5\u6c47\u603b',
+        '',
+        `\u8d26\u53f7\u6570\uff1a${stats.length}`,
+        `\u6210\u529f\uff1a${successCount}`,
+        `\u5931\u8d25\uff1a${failedCount}`,
+        `\u4eca\u65e5\u603b\u83b7\u53d6\uff1a+${totalCollectedPoints}`,
+        `\u603b\u8017\u65f6\uff1a${totalDurationMinutes}min`,
+        ''
+    ]
+
+    for (const stat of stats) {
+        lines.push(`- ${stat.email}${stat.success ? '' : ' \u5931\u8d25'}`)
+        lines.push(`  \u79ef\u5206\uff1a${stat.initialPoints} + ${stat.collectedPoints} = ${stat.finalPoints}`)
+        lines.push(`  \u5f00\u59cb\uff1a${stat.startedAt}`)
+        lines.push(`  \u7ed3\u675f\uff1a${stat.endedAt}`)
+        lines.push(`  \u8017\u65f6\uff1a${stat.duration.toFixed(1)}s`)
+        lines.push('')
+    }
+
+    return lines.join('\n').trimEnd()
 }
 
 interface UserData {
@@ -213,6 +278,7 @@ export class MicrosoftRewardsBot {
                     `Completed all accounts | Accounts processed: ${allAccountStats.length} | Total points collected: +${totalCollectedPoints} | Old total: ${totalInitialPoints} → New total: ${totalFinalPoints} | Total runtime: ${totalDurationMinutes}min`,
                     'green'
                 )
+                await this.sendDailyAccountSummary(allAccountStats, runStartTime)
                 await flushAllWebhooks()
                 process.exit(code ?? 0)
             }
@@ -253,6 +319,24 @@ export class MicrosoftRewardsBot {
         })
     }
 
+    private async sendDailyAccountSummary(stats: AccountStats[], runStartTime: number): Promise<void> {
+        const config = this.config.webhook.serverChan
+
+        if (!config?.enabled || !config.sendKey) {
+            return
+        }
+
+        try {
+            await sendServerChan(config, formatDailyAccountSummary(stats, runStartTime))
+        } catch (error) {
+            this.logger.warn(
+                'main',
+                'SERVER-CHAN',
+                `Failed to send daily account summary: ${error instanceof Error ? error.message : String(error)}`
+            )
+        }
+    }
+
     private async runTasks(accounts: Account[], runStartTime: number): Promise<AccountStats[]> {
         const accountStats: AccountStats[] = []
 
@@ -281,21 +365,20 @@ export class MicrosoftRewardsBot {
                     return undefined
                 })
 
-                const durationSeconds = ((Date.now() - accountStartTime) / 1000).toFixed(1)
-
                 if (result) {
                     const collectedPoints = result.collectedPoints ?? 0
                     const accountInitialPoints = result.initialPoints ?? 0
                     const accountFinalPoints = accountInitialPoints + collectedPoints
+                    const stats = createAccountStats(
+                        accountEmail,
+                        accountStartTime,
+                        accountInitialPoints,
+                        collectedPoints,
+                        true
+                    )
+                    const durationSeconds = stats.duration.toFixed(1)
 
-                    accountStats.push({
-                        email: accountEmail,
-                        initialPoints: accountInitialPoints,
-                        finalPoints: accountFinalPoints,
-                        collectedPoints: collectedPoints,
-                        duration: parseFloat(durationSeconds),
-                        success: true
-                    })
+                    accountStats.push(stats)
 
                     this.logger.info(
                         'main',
@@ -304,33 +387,25 @@ export class MicrosoftRewardsBot {
                         'green'
                     )
                 } else {
-                    accountStats.push({
-                        email: accountEmail,
-                        initialPoints: 0,
-                        finalPoints: 0,
-                        collectedPoints: 0,
-                        duration: parseFloat(durationSeconds),
-                        success: false,
-                        error: 'Flow failed'
-                    })
+                    accountStats.push(createAccountStats(accountEmail, accountStartTime, 0, 0, false, 'Flow failed'))
                 }
             } catch (error) {
-                const durationSeconds = ((Date.now() - accountStartTime) / 1000).toFixed(1)
                 this.logger.error(
                     'main',
                     'ACCOUNT-ERROR',
                     `${accountEmail}: ${error instanceof Error ? error.message : String(error)}`
                 )
 
-                accountStats.push({
-                    email: accountEmail,
-                    initialPoints: 0,
-                    finalPoints: 0,
-                    collectedPoints: 0,
-                    duration: parseFloat(durationSeconds),
-                    success: false,
-                    error: error instanceof Error ? error.message : String(error)
-                })
+                accountStats.push(
+                    createAccountStats(
+                        accountEmail,
+                        accountStartTime,
+                        0,
+                        0,
+                        false,
+                        error instanceof Error ? error.message : String(error)
+                    )
+                )
             }
         }
 
@@ -347,6 +422,7 @@ export class MicrosoftRewardsBot {
                 'green'
             )
 
+            await this.sendDailyAccountSummary(accountStats, runStartTime)
             await flushAllWebhooks()
             process.exit()
         }
@@ -389,7 +465,11 @@ export class MicrosoftRewardsBot {
                 try {
                     data = await this.browser.func.getDashboardData()
                 } catch (error) {
-                    this.logger.warn(this.isMobile, 'MAIN', 'Desktop dashboard API not available, using App dashboard as fallback')
+                    this.logger.warn(
+                        this.isMobile,
+                        'MAIN',
+                        'Desktop dashboard API not available, using App dashboard as fallback'
+                    )
                 }
 
                 const appData: AppDashboardData = await this.browser.func.getAppDashboardData()
@@ -401,15 +481,22 @@ export class MicrosoftRewardsBot {
                 if (!data) {
                     // 从 App Dashboard 获取国家信息
                     const appCountry = appData.response.profile.attributes.country || 'cn'
-                    this.userData.geoLocale = account.geoLocale === 'auto' ? appCountry.toLowerCase() : account.geoLocale.toLowerCase()
-                    const appBalance = Number(appData.response.balance ?? 0)                    
+                    this.userData.geoLocale =
+                        account.geoLocale === 'auto' ? appCountry.toLowerCase() : account.geoLocale.toLowerCase()
+                    const appBalance = Number(appData.response.balance ?? 0)
                     this.userData.initialPoints = appBalance
                     this.userData.currentPoints = appBalance
-                    this.logger.info(this.isMobile, 'GEO-LOCALE', `Using App Dashboard country: ${this.userData.geoLocale}`)
+                    this.logger.info(
+                        this.isMobile,
+                        'GEO-LOCALE',
+                        `Using App Dashboard country: ${this.userData.geoLocale}`
+                    )
                 } else {
                     // Set geo
                     this.userData.geoLocale =
-                        account.geoLocale === 'auto' ? data.userProfile.attributes.country : account.geoLocale.toLowerCase()
+                        account.geoLocale === 'auto'
+                            ? data.userProfile.attributes.country
+                            : account.geoLocale.toLowerCase()
                     if (this.userData.geoLocale.length > 2) {
                         this.logger.warn(
                             'main',
@@ -427,7 +514,8 @@ export class MicrosoftRewardsBot {
                 const browserEarnable = await this.browser.func.getBrowserEarnablePoints()
                 const appEarnable = await this.browser.func.getAppEarnablePoints()
 
-                this.pointsCanCollect = (browserEarnable?.mobileSearchPoints ?? 0) + (appEarnable?.totalEarnablePoints ?? 0)
+                this.pointsCanCollect =
+                    (browserEarnable?.mobileSearchPoints ?? 0) + (appEarnable?.totalEarnablePoints ?? 0)
 
                 this.logger.info(
                     'main',
@@ -438,16 +526,21 @@ export class MicrosoftRewardsBot {
                 )
 
                 if (this.config.workers.doAppPromotions) await this.workers.doAppPromotions(appData)
-                
+
                 // Desktop Dashboard 相关任务（仅当 API 可用时执行）
                 if (data) {
                     if (this.config.workers.doDailySet) await this.workers.doDailySet(data, this.mainMobilePage)
                     if (this.config.workers.doSpecialPromotions) await this.workers.doSpecialPromotions(data)
-                    if (this.config.workers.doMorePromotions) await this.workers.doMorePromotions(data, this.mainMobilePage)
+                    if (this.config.workers.doMorePromotions)
+                        await this.workers.doMorePromotions(data, this.mainMobilePage)
                 } else {
-                    this.logger.warn(this.isMobile, 'WORKERS', 'Skipping desktop tasks - Desktop Dashboard API not available')
+                    this.logger.warn(
+                        this.isMobile,
+                        'WORKERS',
+                        'Skipping desktop tasks - Desktop Dashboard API not available'
+                    )
                 }
-                
+
                 if (this.config.workers.doDailyCheckIn) await this.activities.doDailyCheckIn()
                 if (this.config.workers.doReadToEarn) await this.activities.doReadToEarn()
 
@@ -489,7 +582,11 @@ export class MicrosoftRewardsBot {
                         collectedPoints: collectedPoints || 0
                     }
                 } else {
-                    this.logger.warn(this.isMobile, 'FLOW', 'Skipping search tasks - Desktop Dashboard API not available')
+                    this.logger.warn(
+                        this.isMobile,
+                        'FLOW',
+                        'Skipping search tasks - Desktop Dashboard API not available'
+                    )
                     const finalPoints = Number(this.userData.currentPoints ?? initialPoints)
                     const collectedPoints = Math.max(0, finalPoints - initialPoints)
                     this.userData.gainedPoints = collectedPoints

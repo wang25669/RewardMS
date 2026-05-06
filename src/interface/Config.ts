@@ -52,6 +52,7 @@ export interface ConfigWorkers {
 export interface ConfigWebhook {
     discord?: WebhookDiscordConfig
     ntfy?: WebhookNtfyConfig
+    serverChan?: WebhookServerChanConfig
     webhookLogFilter: LogFilter
 }
 
@@ -76,4 +77,10 @@ export interface WebhookNtfyConfig {
     title?: string
     tags?: string[]
     priority?: 1 | 2 | 3 | 4 | 5 // 5 highest (important)
+}
+
+export interface WebhookServerChanConfig {
+    enabled?: boolean
+    sendKey: string
+    title?: string
 }
