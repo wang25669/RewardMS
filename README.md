@@ -1,10 +1,15 @@
 本仓库基于https://github.com/TheNetsky/Microsoft-Rewards-Script
+Triggering re-indexing
 
 > [!CAUTION]
-> V3.x does not support the new Bing Rewards interface!
 >
 > Use at your own risk — some features may not work as expected.
+## Disclaimer
 
+Use at your own risk.  
+Automation of Microsoft Rewards may lead to account suspension or bans.  
+This software is provided for educational purposes only.  
+The authors are not responsible for any actions taken by Microsoft.
 ---
 
 ## Table of Contents
@@ -238,10 +243,3 @@ Edit `src/accounts.json`.
 > Most login issues can be fixed by deleting your /sessions folder, and redeploying the script
 
 ---
-
-## Disclaimer
-
-Use at your own risk.  
-Automation of Microsoft Rewards may lead to account suspension or bans.  
-This software is provided for educational purposes only.  
-The authors are not responsible for any actions taken by Microsoft.
