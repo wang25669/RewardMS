@@ -48,7 +48,9 @@ export class UserAgentManager {
     async getChromeVersion(isMobile: boolean): Promise<string> {
         try {
             const request = {
-                url: 'https://git.8998.dpdns.org/chrome-for-testing/last-known-good-versions.json',
+                //本地编译时候可替换代理地址
+                //url: 'https://git.8998.dpdns.org/chrome-for-testing/last-known-good-versions.json',
+                url: 'https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json',
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
