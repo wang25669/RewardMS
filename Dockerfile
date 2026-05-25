@@ -5,8 +5,7 @@ FROM node:24-slim AS builder
 
 WORKDIR /usr/src/microsoft-rewards-script
 
-ENV PLAYWRIGHT_BROWSERS_PATH=0 \
-    PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=0
 
 # 使用国内 npm 镜像
 RUN npm config set registry https://registry.npmmirror.com
@@ -30,8 +29,7 @@ RUN rm -rf node_modules \
     && npm ci --omit=dev --ignore-scripts \
     && npm cache clean --force
 
-# Install Chromium Headless Shell, and cleanup (使用国内镜像)
-ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+# Install Chromium Headless Shell, and cleanup
 RUN npx patchright install --with-deps --only-shell chromium \
     && rm -rf /root/.cache /tmp/* /var/tmp/*
 
