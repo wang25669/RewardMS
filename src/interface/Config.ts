@@ -22,7 +22,7 @@ export interface ConfigSearchSettings {
     clickRandomResults: boolean
     parallelSearching: boolean
     queryEngines: QueryEngine[]
-    searchResultVisitTime: number | string
+    searchResultVisitTime: number | string | ConfigDelay
     searchDelay: ConfigDelay
     readDelay: ConfigDelay
 }

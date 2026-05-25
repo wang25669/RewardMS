@@ -23,7 +23,10 @@
         "clickRandomResults": true,
         "parallelSearching": false,
         "queryEngines": ["baidu","local"],
-        "searchResultVisitTime": "30sec",
+        "searchResultVisitTime": {
+            "min": "8sec",
+            "max": "15sec"
+        },
         "searchDelay": {
             "min": "1min",
             "max": "5min"

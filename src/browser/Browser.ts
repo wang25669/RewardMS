@@ -98,7 +98,10 @@ class Browser {
             // 针对国内优化：屏蔽 Google 等被墙资源，防止页面加载卡死
             await context.route('**/*', async (route, request) => {
                 const url = request.url()
+                const resourceType = request.resourceType()
                 if (
+                    resourceType === 'media' ||
+                    resourceType === 'font' ||
                     url.includes('googleapis.com') ||
                     url.includes('gstatic.com') ||
                     url.includes('google-analytics.com') ||

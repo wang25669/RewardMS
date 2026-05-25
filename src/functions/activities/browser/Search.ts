@@ -8,6 +8,7 @@ export class Search extends Workers {
     private bingHome = 'https://cn.bing.com'
     private searchPageURL = ''
     private searchCount = 0
+    private readonly refreshThreshold = 5
 
     public async doSearch(data: DashboardData, page: Page, isMobile: boolean): Promise<number> {
         const startBalance = Number(this.bot.userData.currentPoints ?? 0)
@@ -59,8 +60,7 @@ export class Search extends Workers {
             const targetUrl = this.searchPageURL ? this.searchPageURL : this.bingHome
             this.bot.logger.debug(isMobile, 'SEARCH-BING', `Navigating to search page | url=${targetUrl}`)
 
-            await page.goto(targetUrl)
-            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => { })
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
             await this.bot.browser.utils.tryDismissAllMessages(page)
 
             let stagnantLoop = 0
@@ -263,28 +263,23 @@ export class Search extends Workers {
 
     private async bingSearch(searchPage: Page, query: string, isMobile: boolean) {
         const maxAttempts = 5
-        const refreshThreshold = 10 // Page gets sluggish after x searches?
 
         this.searchCount++
 
-        if (this.searchCount % refreshThreshold === 0) {
+        if (this.searchCount % this.refreshThreshold === 0) {
             this.bot.logger.info(
                 isMobile,
                 'SEARCH-BING',
-                `Returning to home page to clear accumulated page context | count=${this.searchCount} | threshold=${refreshThreshold}`
+                `Refreshing search page to clear accumulated page context | count=${this.searchCount} | threshold=${this.refreshThreshold}`
             )
 
-            this.bot.logger.debug(isMobile, 'SEARCH-BING', `Returning home to refresh state | url=${this.bingHome}`)
-
-            await searchPage.goto(this.bingHome)
-            await searchPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => { })
-            await this.bot.browser.utils.tryDismissAllMessages(searchPage)
+            searchPage = await this.refreshSearchPage(searchPage, isMobile)
         }
 
         this.bot.logger.debug(
             isMobile,
             'SEARCH-BING',
-            `Starting bingSearch | query="${query}" | maxAttempts=${maxAttempts} | searchCount=${this.searchCount} | refreshEvery=${refreshThreshold} | scrollRandomResults=${this.bot.config.searchSettings.scrollRandomResults} | clickRandomResults=${this.bot.config.searchSettings.clickRandomResults}`
+            `Starting bingSearch | query="${query}" | maxAttempts=${maxAttempts} | searchCount=${this.searchCount} | refreshEvery=${this.refreshThreshold} | scrollRandomResults=${this.bot.config.searchSettings.scrollRandomResults} | clickRandomResults=${this.bot.config.searchSettings.clickRandomResults}`
         )
 
         for (let i = 0; i < maxAttempts; i++) {
@@ -312,7 +307,10 @@ export class Search extends Workers {
                 }
 
                 await this.bot.utils.wait(1000)
-                await this.bot.browser.utils.ghostClick(searchPage, searchBar, { clickCount: 3 })
+                const clickedSearchBox = await this.bot.browser.utils.ghostClick(searchPage, searchBar, { clickCount: 3 })
+                if (!clickedSearchBox) {
+                    throw new Error('Search box click failed or timed out')
+                }
                 await searchBox.fill('')
 
                 await searchPage.keyboard.type(query, { delay: 50 })
@@ -373,7 +371,7 @@ export class Search extends Workers {
                 this.bot.logger.debug(
                     isMobile,
                     'SEARCH-BING-DETAIL',
-                    `Search error details: current page=${searchPage.url()}, searchCount=${this.searchCount}, refreshThreshold=10`
+                    `Search error details: current page=${searchPage.url()}, searchCount=${this.searchCount}, refreshThreshold=${this.refreshThreshold}`
                 )
 
                 // 重试前先导航到首页，确保页面状态正确
@@ -383,9 +381,7 @@ export class Search extends Workers {
                     `Navigating to Bing home before retry | attempt=${i + 1}/${maxAttempts}`
                 )
 
-                await searchPage.goto(this.bingHome)
-                await searchPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => { })
-                await this.bot.browser.utils.tryDismissAllMessages(searchPage)
+                searchPage = await this.refreshSearchPage(searchPage, isMobile)
 
                 this.bot.logger.warn(
                     isMobile,
@@ -404,6 +400,29 @@ export class Search extends Workers {
         )
 
         return await this.bot.browser.func.getSearchPoints()
+    }
+
+    private getSearchResultVisitTime(): number {
+        const visitTime = this.bot.config.searchSettings.searchResultVisitTime
+
+        if (typeof visitTime === 'object' && visitTime !== null && 'min' in visitTime && 'max' in visitTime) {
+            return this.bot.utils.randomDelay(visitTime.min, visitTime.max)
+        }
+
+        return this.bot.utils.stringToNumber(visitTime)
+    }
+
+    private async refreshSearchPage(page: Page, isMobile: boolean): Promise<Page> {
+        const activePage = await this.bot.browser.utils.closeTabs(page)
+
+        this.bot.logger.debug(isMobile, 'SEARCH-BING', 'Navigating to about:blank before returning home')
+        await activePage.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {})
+
+        this.bot.logger.debug(isMobile, 'SEARCH-BING', `Returning home to refresh state | url=${this.bingHome}`)
+        await activePage.goto(this.bingHome, { waitUntil: 'domcontentloaded', timeout: 15000 })
+        await this.bot.browser.utils.tryDismissAllMessages(activePage)
+
+        return activePage
     }
 
     private async randomScroll(page: Page, isMobile: boolean) {
@@ -436,11 +455,18 @@ export class Search extends Workers {
 
             const searchPageUrl = page.url()
 
-            await this.bot.browser.utils.ghostClick(page, '#b_results .b_algo h2')
-            await this.bot.utils.wait(this.bot.config.searchSettings.searchResultVisitTime)
+            const clicked = await this.bot.browser.utils.ghostClick(page, '#b_results .b_algo h2')
+            if (!clicked) {
+                this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', 'No result clicked, skipping visit wait')
+                return
+            }
+
+            const visitTime = this.getSearchResultVisitTime()
+            this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', `Waiting on clicked result | delayMs=${visitTime}`)
+            await this.bot.utils.wait(visitTime)
 
             if (isMobile) {
-                await page.goto(searchPageUrl)
+                await page.goto(searchPageUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
                 this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', 'Navigated back to search page')
             } else {
                 const newTab = await this.bot.browser.utils.getLatestTab(page)

@@ -77,7 +77,7 @@ export const ConfigSchema = z.object({
         clickRandomResults: z.boolean(),
         parallelSearching: z.boolean(),
         queryEngines: z.array(QueryEngineSchema),
-        searchResultVisitTime: NumberOrString,
+        searchResultVisitTime: z.union([NumberOrString, DelaySchema]),
         searchDelay: DelaySchema,
         readDelay: DelaySchema
     }),
