@@ -66,6 +66,8 @@ jobs:
                   context: .
                   platforms: ${{ matrix.platform }}
                   push: true
+                  provenance: false
+                  sbom: false
                   tags: |
                       ${{ needs.prepare.outputs.image }}:build-${{ github.sha }}-${{ matrix.suffix }}
                   cache-from: type=gha,scope=${{ matrix.suffix }}
