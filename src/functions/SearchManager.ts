@@ -379,10 +379,6 @@ export class SearchManager {
 
         await this.bot['login'].login(this.bot.mainDesktopPage, account)
 
-        this.bot.logger.info('main', 'SEARCH-DESKTOP-LOGIN', 'Login passed, verifying')
-        this.bot.logger.debug('main', 'SEARCH-DESKTOP-LOGIN', 'verifyBingSession')
-
-        await this.bot['login'].verifyBingSession(this.bot.mainDesktopPage, account)
         this.bot.cookies.desktop = await session.context.cookies()
 
         this.bot.logger.debug('main', 'SEARCH-DESKTOP-LOGIN', 'Cookies stored')

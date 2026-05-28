@@ -98,7 +98,38 @@ export async function saveSessionData(
             await fs.promises.mkdir(sessionDir, { recursive: true })
         }
 
-        await fs.promises.writeFile(path.join(sessionDir, cookiesFileName), JSON.stringify(cookies))
+        // Filter cookies based on allowed domains
+        const allowedDomains = [
+            'bing.com',
+            'live.com',
+            'microsoft.com',
+            'microsoftonline.com',
+            'windows.net',
+            'msn.com',
+            'msn.cn',
+            'live.cn',
+            'bing.com.cn',
+            'passport.net'
+        ]
+
+        const filteredCookies = cookies.filter(cookie => {
+            if (!cookie.domain) return false
+            const domain = cookie.domain.toLowerCase()
+            return allowedDomains.some(d => domain === d || domain.endsWith('.' + d))
+        })
+
+        // Deduplicate by name + domain + path
+        const seen = new Set<string>()
+        const dedupedCookies: Cookie[] = []
+        for (const cookie of filteredCookies) {
+            const key = `${cookie.name}|${cookie.domain}|${cookie.path || '/'}`
+            if (!seen.has(key)) {
+                seen.add(key)
+                dedupedCookies.push(cookie)
+            }
+        }
+
+        await fs.promises.writeFile(path.join(sessionDir, cookiesFileName), JSON.stringify(dedupedCookies))
 
         return sessionDir
     } catch (error) {

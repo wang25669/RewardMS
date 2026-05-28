@@ -145,10 +145,10 @@ export class UserAgentManager {
                 `${fingerprint.fingerprint.navigator.appCodeName}/`,
                 ''
             )
-            
+
             // 修复浏览器指纹与 UA 的矛盾
             if (isMobile) {
-                fingerprint.fingerprint.navigator.platform = 'Linux armv81'
+                fingerprint.fingerprint.navigator.platform = 'Linux armv8l'
                 fingerprint.fingerprint.navigator.deviceMemory = 4
                 fingerprint.fingerprint.navigator.hardwareConcurrency = 8
             } else {
@@ -190,4 +190,55 @@ export class UserAgentManager {
             throw error
         }
     }
+
+    normalizeFingerprint(
+        fingerprint: BrowserFingerprintWithHeaders,
+        isMobile: boolean,
+        langCode?: string
+    ): BrowserFingerprintWithHeaders {
+        const lang = langCode || 'zh-CN'
+        const mainLang = lang.split('-')[0] || lang
+        const languages = lang.toLowerCase().startsWith('zh')
+            ? ['zh-CN', 'zh', 'en-US']
+            : [lang, mainLang, 'en-US']
+
+        const headers = fingerprint.headers || {}
+
+        // Accept-Language
+        const acceptLangValue = languages.map((l, idx) => idx === 0 ? l : `${l};q=${(1 - idx * 0.1).toFixed(1)}`).join(',')
+        headers['accept-language'] = acceptLangValue
+
+        // Navigator properties
+        if (fingerprint.fingerprint && fingerprint.fingerprint.navigator) {
+            fingerprint.fingerprint.navigator.language = lang
+            fingerprint.fingerprint.navigator.languages = languages
+
+            if (isMobile) {
+                fingerprint.fingerprint.navigator.platform = 'Linux armv8l'
+                fingerprint.fingerprint.navigator.deviceMemory = 4
+                fingerprint.fingerprint.navigator.hardwareConcurrency = 8
+
+                if (fingerprint.fingerprint.navigator.userAgentData) {
+                    fingerprint.fingerprint.navigator.userAgentData.mobile = true
+                    fingerprint.fingerprint.navigator.userAgentData.platform = 'Android'
+                }
+            } else {
+                fingerprint.fingerprint.navigator.platform = 'Win32'
+                fingerprint.fingerprint.navigator.deviceMemory = 8
+                fingerprint.fingerprint.navigator.hardwareConcurrency = 16
+
+                if (fingerprint.fingerprint.navigator.userAgentData) {
+                    fingerprint.fingerprint.navigator.userAgentData.mobile = false
+                    fingerprint.fingerprint.navigator.userAgentData.platform = 'Windows'
+                }
+            }
+        }
+
+        // Headers overrides (strictly matching packet captures - all lowercase keys)
+        headers['sec-ch-ua-mobile'] = isMobile ? '?1' : '?0'
+        headers['sec-ch-ua-platform'] = isMobile ? '"Android"' : '"Windows"'
+
+        return fingerprint
+    }
 }
+

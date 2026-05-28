@@ -80,7 +80,9 @@ class Browser {
                 this.bot.isMobile
             )
 
-            const fingerprint = sessionData.fingerprint ?? (await this.generateFingerprint(this.bot.isMobile))
+            let fingerprint = sessionData.fingerprint ?? (await this.generateFingerprint(this.bot.isMobile))
+            const userAgentManager = new UserAgentManager(this.bot)
+            fingerprint = userAgentManager.normalizeFingerprint(fingerprint, this.bot.isMobile, account.langCode)
 
             const context = await newInjectedContext(browser as any, { fingerprint })
 

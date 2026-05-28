@@ -549,51 +549,50 @@ export class MicrosoftRewardsBot {
 
                 this.cookies.mobile = await initialContext.cookies()
 
+                let mobilePoints = 0
+                let desktopPoints = 0
+
                 // 搜索任务也需要 data
                 if (data) {
-                    const { mobilePoints, desktopPoints } = await this.searchManager.doSearches(
+                    const searchResults = await this.searchManager.doSearches(
                         data,
                         missingSearchPoints,
                         mobileSession,
                         account,
                         accountEmail
                     )
+                    mobilePoints = searchResults.mobilePoints
+                    desktopPoints = searchResults.desktopPoints
 
                     mobileContextClosed = true
-
-                    //this.userData.gainedPoints = mobilePoints + desktopPoints
-
-                    // Mobile session 可能已关闭，直接用搜索获得的积分计算
-                    //const collectedPoints = mobilePoints + desktopPoints
-
-                    const finalPoints = Number(this.userData.currentPoints ?? initialPoints)
-                    const collectedPoints = Math.max(0, finalPoints - initialPoints)
-                    this.userData.gainedPoints = collectedPoints
-
-                    this.logger.info(
-                        'main',
-                        'FLOW',
-                        //`Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | ${accountEmail}`
-                        `Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | Old: ${initialPoints} → New: ${finalPoints} | ${accountEmail}`
-                    )
-
-                    return {
-                        initialPoints,
-                        collectedPoints: collectedPoints || 0
-                    }
                 } else {
                     this.logger.warn(
                         this.isMobile,
                         'FLOW',
                         'Skipping search tasks - Desktop Dashboard API not available'
                     )
-                    const finalPoints = Number(this.userData.currentPoints ?? initialPoints)
-                    const collectedPoints = Math.max(0, finalPoints - initialPoints)
-                    this.userData.gainedPoints = collectedPoints
-                    return {
-                        initialPoints,
-                        collectedPoints
-                    }
+                }
+
+                let endPoints = initialPoints
+                try {
+                    const finalAppData = await this.browser.func.getAppDashboardData()
+                    endPoints = Number(finalAppData.response.balance ?? initialPoints)
+                } catch (e) {
+                    endPoints = Number(this.userData.currentPoints ?? initialPoints)
+                }
+
+                const collectedPoints = Math.max(0, endPoints - initialPoints)
+                this.userData.gainedPoints = collectedPoints
+
+                this.logger.info(
+                    'main',
+                    'FLOW',
+                    `Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | Old: ${initialPoints} → New: ${endPoints} | ${accountEmail}`
+                )
+
+                return {
+                    initialPoints,
+                    collectedPoints: collectedPoints || 0
                 }
             })
         } finally {

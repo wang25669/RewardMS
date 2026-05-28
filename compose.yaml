@@ -1,8 +1,8 @@
 services:
-    microsoft-rewards-script:
+    rewardms:
         build: .
         image: ghcr.io/wang25669/rewardms:latest
-        container_name: microsoft-rewards-script
+        container_name: rewardms
         restart: unless-stopped
         shm_size: "256m"
 

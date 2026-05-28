@@ -250,7 +250,11 @@ export default class BrowserFunc {
                     Authorization: `Bearer ${this.bot.accessToken}`,
                     'X-Rewards-Country': this.bot.userData.geoLocale,
                     'X-Rewards-Language': 'zh',
-                    'X-Rewards-ismobile': 'true'
+                    'X-Rewards-ismobile': 'true',
+                    'x-rewards-partnerid': 'startapp',
+                    'x-rewards-appid': 'SAAndroid/31.1.2110003554',
+                    'x-rewards-flights': 'rwgobig',
+                    'user-agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UQ1A.240205.002; ) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.82 Mobile Safari/537.36 BingSapphire/31.1.2110003554'
                 }
             }
 

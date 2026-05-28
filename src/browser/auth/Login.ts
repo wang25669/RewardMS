@@ -621,8 +621,12 @@ export class Login {
         this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Starting Bing session verification')
         await this.verifyBingSession(page, account)
 
-        this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Starting rewards session verification')
-        await this.getRewardsSession(page)
+        if (this.bot.isMobile) {
+            this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Starting rewards session verification')
+            await this.getRewardsSession(page)
+        } else {
+            this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Skipping rewards session verification for desktop (not needed for search)')
+        }
 
         const browser = page.context()
         const cookies = await browser.cookies()
@@ -716,7 +720,7 @@ if (actionableStates.includes(state)) {
     }
 
     private async getRewardsSession(page: Page) {
-        const loopMax = 3
+        const loopMax = 1
 
         this.bot.logger.info(this.bot.isMobile, 'GET-REWARD-SESSION', 'Fetching request token')
 
@@ -731,7 +735,7 @@ if (actionableStates.includes(state)) {
                 this.bot.logger.debug(this.bot.isMobile, 'GET-REWARD-SESSION', `Token fetch loop ${i + 1}/${loopMax}`)
 
                 const u = new URL(page.url())
-                const atRewardHome = u.hostname === 'rewards.bing.com' && u.pathname === '/'
+                const atRewardHome = u.hostname === 'rewards.bing.com' && (u.pathname === '/' || u.pathname.includes('/dashboard'))
 
                 if (atRewardHome) {
                     await this.bot.browser.utils.tryDismissAllMessages(page)
@@ -763,7 +767,9 @@ if (actionableStates.includes(state)) {
                     )
                 }
 
-                await this.bot.utils.wait(1000)
+                if (loopMax > 1) {
+                    await this.bot.utils.wait(1000)
+                }
             }
 
             this.bot.logger.warn(
