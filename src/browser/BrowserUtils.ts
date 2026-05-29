@@ -29,42 +29,49 @@ export default class BrowserUtils {
                 { selector: '#reward_pivot_earn', label: 'Reward Coupon Accept' }
             ]
 
-            const checkVisible = await Promise.allSettled(
-                buttons.map(async b => ({
-                    ...b,
-                    isVisible: await page
-                        .locator(b.selector)
-                        .isVisible()
-                        .catch(() => false)
-                }))
-            )
+            // 使用单次 page.evaluate 批量检测所有按钮的可见性
+            // 替代之前 13 次独立的 locator.isVisible() CDP 调用，大幅减少通信开销
+            const selectors = buttons.map(b => b.selector)
+            const visibilityResults: boolean[] = await page.evaluate((sels: string[]) => {
+                return sels.map(selector => {
+                    try {
+                        const el = document.querySelector(selector)
+                        if (!el) return false
+                        const style = window.getComputedStyle(el)
+                        const rect = el.getBoundingClientRect()
+                        return (
+                            style.display !== 'none' &&
+                            style.visibility !== 'hidden' &&
+                            parseFloat(style.opacity) > 0 &&
+                            rect.width > 0 &&
+                            rect.height > 0
+                        )
+                    } catch {
+                        return false
+                    }
+                })
+            }, selectors).catch(() => buttons.map(() => false))
 
-            const visibleButtons = checkVisible
-                .filter(r => r.status === 'fulfilled' && r.value.isVisible)
-                .map(r => (r.status === 'fulfilled' ? r.value : null))
-                .filter(Boolean)
+            const visibleButtons = buttons.filter((_, idx) => visibilityResults[idx])
 
             if (visibleButtons.length > 0) {
-                await Promise.allSettled(
-                    visibleButtons.map(async b => {
-                        if (b) {
-                            const clicked = await this.ghostClick(page, b.selector)
-                            if (clicked) {
-                                this.bot.logger.debug(
-                                    this.bot.isMobile,
-                                    'DISMISS-ALL-MESSAGES',
-                                    `Dismissed: ${b.label}`
-                                )
-                            }
-                        }
-                    })
-                )
+                // 依次点击可见按钮（串行以避免 DOM 变化导致的竞态）
+                for (const b of visibleButtons) {
+                    const clicked = await this.ghostClick(page, b.selector)
+                    if (clicked) {
+                        this.bot.logger.debug(
+                            this.bot.isMobile,
+                            'DISMISS-ALL-MESSAGES',
+                            `Dismissed: ${b.label}`
+                        )
+                    }
+                }
                 await this.bot.utils.wait(300)
             }
 
-            // Overlay
-            const overlay = await page.$('#bnp_overlay_wrapper')
-            if (overlay) {
+            // Overlay 处理
+            const hasOverlay = await page.evaluate(() => !!document.querySelector('#bnp_overlay_wrapper')).catch(() => false)
+            if (hasOverlay) {
                 const rejected = await this.ghostClick(page, '#bnp_btn_reject, button[aria-label*="Reject" i]')
                 if (rejected) {
                     this.bot.logger.debug(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', 'Dismissed: Bing Overlay Reject')

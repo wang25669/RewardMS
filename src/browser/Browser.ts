@@ -80,7 +80,29 @@ class Browser {
                 this.bot.isMobile
             )
 
-            let fingerprint = sessionData.fingerprint ?? (await this.generateFingerprint(this.bot.isMobile))
+            let fingerprint = sessionData.fingerprint
+
+            // 指纹自检：检测已保存的指纹是否与当前模式（移动/桌面）匹配
+            if (fingerprint) {
+                const savedPlatform = fingerprint.fingerprint?.navigator?.platform || ''
+                const expectedPlatformKeyword = this.bot.isMobile ? 'Linux' : 'Win'
+                const savedUA = fingerprint.fingerprint?.navigator?.userAgent || ''
+                const hasCorrectUA = this.bot.isMobile
+                    ? savedUA.includes('Android') && savedUA.includes('EdgA')
+                    : savedUA.includes('Windows') && savedUA.includes('Edg/')
+
+                if (!savedPlatform.includes(expectedPlatformKeyword) || !hasCorrectUA) {
+                    this.bot.logger.warn(
+                        this.bot.isMobile,
+                        'BROWSER',
+                        `Saved fingerprint is corrupted (platform: "${savedPlatform}", UA match: ${hasCorrectUA}), regenerating...`
+                    )
+                    fingerprint = await this.generateFingerprint(this.bot.isMobile)
+                }
+            } else {
+                fingerprint = await this.generateFingerprint(this.bot.isMobile)
+            }
+
             const userAgentManager = new UserAgentManager(this.bot)
             fingerprint = userAgentManager.normalizeFingerprint(fingerprint, this.bot.isMobile, account.langCode)
 
@@ -97,7 +119,9 @@ class Browser {
 
             context.setDefaultTimeout(this.bot.utils.stringToNumber(this.bot.config?.globalTimeout ?? 30000))
 
-            // 针对国内优化：屏蔽 Google 等被墙资源，防止页面加载卡死
+            // 屏蔽不必要的资源类型和被墙域名以加速页面加载
+            // 注意：Dockerfile 镜像源是构建时问题（GitHub Actions 海外构建不受影响），
+            // 但此处是运行时逻辑，容器在国内运行时 Google 域名会被墙导致页面卡死
             await context.route('**/*', async (route, request) => {
                 const url = request.url()
                 const resourceType = request.resourceType()
@@ -107,7 +131,8 @@ class Browser {
                     url.includes('googleapis.com') ||
                     url.includes('gstatic.com') ||
                     url.includes('google-analytics.com') ||
-                    url.includes('doubleclick.net')
+                    url.includes('doubleclick.net') ||
+                    url.includes('googletagmanager.com')
                 ) {
                     await route.abort()
                 } else {
@@ -149,9 +174,11 @@ class Browser {
     }
 
     async generateFingerprint(isMobile: boolean) {
+        // 严格限制 operatingSystems 以防止 FingerprintGenerator 发生跨系统 Relax
+        // 移动端仅使用 android，桌面端仅使用 windows
         const fingerPrintData = new FingerprintGenerator().getFingerprint({
             devices: isMobile ? ['mobile'] : ['desktop'],
-            operatingSystems: isMobile ? ['android', 'ios'] : ['windows', 'linux'],
+            operatingSystems: isMobile ? ['android'] : ['windows'],
             browsers: [{ name: 'edge' }]
         })
 

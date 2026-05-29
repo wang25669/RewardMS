@@ -1,5 +1,4 @@
 本仓库基于https://github.com/TheNetsky/Microsoft-Rewards-Script
-Triggering re-indexing
 
 > [!CAUTION]
 >
