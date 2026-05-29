@@ -82,24 +82,62 @@ class Browser {
 
             let fingerprint = sessionData.fingerprint
 
-            // 指纹自检：检测已保存的指纹是否与当前模式（移动/桌面）匹配
+            // 指纹自检 & 质量评估：检测已保存的指纹是否损坏或不合规（如 Mac 特征泄漏到 Android，或 SwiftShader 泄漏）
+            let needsRegenerate = false
             if (fingerprint) {
-                const savedPlatform = fingerprint.fingerprint?.navigator?.platform || ''
+                const fp = fingerprint.fingerprint || {}
+                const nav = fp.navigator || {}
+                const screen = fp.screen || {}
+                const vc = fp.videoCard || {}
+                const fonts = fp.fonts || []
+
+                const savedPlatform = nav.platform || ''
+                const savedUA = nav.userAgent || ''
                 const expectedPlatformKeyword = this.bot.isMobile ? 'Linux' : 'Win'
-                const savedUA = fingerprint.fingerprint?.navigator?.userAgent || ''
                 const hasCorrectUA = this.bot.isMobile
                     ? savedUA.includes('Android') && savedUA.includes('EdgA')
                     : savedUA.includes('Windows') && savedUA.includes('Edg/')
 
                 if (!savedPlatform.includes(expectedPlatformKeyword) || !hasCorrectUA) {
+                    needsRegenerate = true
                     this.bot.logger.warn(
                         this.bot.isMobile,
                         'BROWSER',
                         `Saved fingerprint is corrupted (platform: "${savedPlatform}", UA match: ${hasCorrectUA}), regenerating...`
                     )
-                    fingerprint = await this.generateFingerprint(this.bot.isMobile)
+                } else if (this.bot.isMobile) {
+                    // 移动端深度自检
+                    const hasMacGPULeak = vc.renderer && (vc.renderer.includes('Apple') || vc.renderer.includes('Metal') || vc.renderer.includes('M2') || vc.renderer.includes('M1'))
+                    const hasDesktopGPULeak = vc.renderer && (vc.renderer.includes('Intel') || vc.renderer.includes('NVIDIA') || vc.renderer.includes('AMD') || vc.renderer.includes('SwiftShader') || vc.renderer.includes('GeForce'))
+                    const hasMacFontLeak = fonts.some((f: any) => typeof f === 'string' && (f.includes('Helvetica Neue') || f.includes('Menlo') || f.includes('Gill Sans') || f.includes('Arial Unicode MS')))
+                    const hasDesktopResolution = screen.width > 800
+                    const hasZeroTouchPoints = nav.maxTouchPoints === 0
+
+                    if (hasMacGPULeak || hasDesktopGPULeak || hasMacFontLeak || hasDesktopResolution || hasZeroTouchPoints) {
+                        needsRegenerate = true
+                        this.bot.logger.warn(
+                            this.bot.isMobile,
+                            'BROWSER',
+                            `Saved mobile fingerprint has low quality or leaked desktop/Mac features, regenerating...`
+                        )
+                    }
+                } else {
+                    // 桌面端深度自检
+                    const hasSoftwareGPULeak = vc.renderer && (vc.renderer.includes('SwiftShader') || vc.renderer.includes('software') || vc.renderer.includes('Microsoft'))
+                    if (hasSoftwareGPULeak) {
+                        needsRegenerate = true
+                        this.bot.logger.warn(
+                            this.bot.isMobile,
+                            'BROWSER',
+                            `Saved desktop fingerprint is using software SwiftShader GPU, regenerating...`
+                        )
+                    }
                 }
             } else {
+                needsRegenerate = true
+            }
+
+            if (needsRegenerate) {
                 fingerprint = await this.generateFingerprint(this.bot.isMobile)
             }
 

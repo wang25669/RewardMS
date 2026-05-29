@@ -271,7 +271,7 @@ export class UserAgentManager {
                 nav.platform = 'Linux armv8l'
                 nav.deviceMemory = 4
                 nav.hardwareConcurrency = 8
-                nav.maxTouchPoints = nav.maxTouchPoints || 5
+                nav.maxTouchPoints = 5
 
                 if (nav.userAgentData) {
                     nav.userAgentData.mobile = true
@@ -319,18 +319,101 @@ export class UserAgentManager {
                 screen.availHeight = picked.ah
             }
 
-            if (!screen.innerWidth || screen.innerWidth === 0) {
-                screen.innerWidth = isMobile ? screen.width : (screen.availWidth || screen.width)
-            }
-            if (!screen.innerHeight || screen.innerHeight === 0) {
-                screen.innerHeight = isMobile ? (screen.height - 100) : ((screen.availHeight || screen.height) - 80)
-            }
-            if (screen.clientWidth === 0) {
-                screen.clientWidth = screen.innerWidth
-            }
-            if (screen.clientHeight === 0) {
+            if (isMobile) {
+                // 移动端屏幕参数强一致性锁定
+                screen.devicePixelRatio = screen.devicePixelRatio && screen.devicePixelRatio >= 2 ? screen.devicePixelRatio : 2
+                screen.colorDepth = 24
+                screen.pixelDepth = 24
+                screen.hasHDR = false
+                
+                // 强制将所有可用和外部维度锁定为移动端物理尺寸，彻底杜绝 availWidth/outerWidth 留下 1366/768 遗留值的低级错误
+                screen.availWidth = screen.width
+                screen.availHeight = screen.availHeight && screen.availHeight <= screen.height ? screen.availHeight : Math.floor(screen.height * 0.9)
+                screen.outerWidth = screen.width
+                screen.outerHeight = screen.height
+                screen.innerWidth = screen.width
+                screen.innerHeight = Math.floor(screen.height * 0.85) // 扣除浏览器顶栏/底栏
+                screen.clientWidth = screen.width
                 screen.clientHeight = screen.innerHeight
+            } else {
+                // 桌面端屏幕参数对齐
+                screen.devicePixelRatio = 1
+                screen.colorDepth = 24
+                screen.pixelDepth = 24
+                screen.hasHDR = false
+                
+                screen.availWidth = screen.availWidth || screen.width
+                screen.availHeight = screen.availHeight || screen.height
+                screen.outerWidth = screen.outerWidth && screen.outerWidth <= screen.width ? screen.outerWidth : screen.width
+                screen.outerHeight = screen.outerHeight && screen.outerHeight <= screen.height ? screen.outerHeight : screen.height
+                screen.innerWidth = screen.innerWidth || (screen.availWidth || screen.width)
+                screen.innerHeight = screen.innerHeight || ((screen.availHeight || screen.height) - 80)
+                screen.clientWidth = screen.clientWidth || screen.innerWidth
+                screen.clientHeight = screen.clientHeight || screen.innerHeight
             }
+        }
+
+        // Fonts normalization
+        if (fingerprint.fingerprint) {
+            if (isMobile) {
+                // Android standard fonts list
+                fingerprint.fingerprint.fonts = [
+                    'sans-serif',
+                    'Roboto',
+                    'Noto Sans',
+                    'Droid Sans',
+                    'monospace'
+                ]
+            } else {
+                // Windows standard fonts list
+                fingerprint.fingerprint.fonts = [
+                    'Arial',
+                    'Arial Black',
+                    'Calibri',
+                    'Cambria',
+                    'Cambria Math',
+                    'Comic Sans MS',
+                    'Consolas',
+                    'Courier New',
+                    'Georgia',
+                    'Impact',
+                    'Lucida Console',
+                    'Lucida Sans Unicode',
+                    'Microsoft Sans Serif',
+                    'MS Gothic',
+                    'MS PGothic',
+                    'MS Sans Serif',
+                    'MS Serif',
+                    'Palatino Linotype',
+                    'Segoe Print',
+                    'Segoe Script',
+                    'Segoe UI',
+                    'Segoe UI Light',
+                    'Segoe UI Semibold',
+                    'Segoe UI Symbol',
+                    'SimSun',
+                    'SimHei',
+                    'Tahoma',
+                    'Times New Roman',
+                    'Trebuchet MS',
+                    'Verdana'
+                ]
+            }
+        }
+
+        // Multimedia devices normalization
+        if (fingerprint.fingerprint) {
+            const mm = (fingerprint.fingerprint as any).multimediaDevices || { speakers: [], micros: [], webcams: [] }
+            if (!mm.speakers || mm.speakers.length === 0) {
+                mm.speakers = [{ deviceId: '', kind: 'audiooutput', label: '', groupId: '' }]
+            }
+            if (!mm.micros || mm.micros.length === 0) {
+                mm.micros = [{ deviceId: '', kind: 'audioinput', label: '', groupId: '' }]
+            }
+            if (!mm.webcams || mm.webcams.length === 0) {
+                mm.webcams = [{ deviceId: '', kind: 'videoinput', label: '', groupId: '' }]
+            }
+            (fingerprint.fingerprint as any).multimediaDevices = mm
         }
 
         // GPU renderer normalization
