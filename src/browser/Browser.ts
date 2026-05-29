@@ -87,7 +87,7 @@ class Browser {
             if (fingerprint) {
                 const fp = fingerprint.fingerprint || {}
                 const nav = fp.navigator || {}
-                const screen = fp.screen || {}
+                const screen = (fp.screen || {}) as any
                 const vc = fp.videoCard || {}
                 const fonts = fp.fonts || []
 
@@ -112,13 +112,17 @@ class Browser {
                     const hasMacFontLeak = fonts.some((f: any) => typeof f === 'string' && (f.includes('Helvetica Neue') || f.includes('Menlo') || f.includes('Gill Sans') || f.includes('Arial Unicode MS')))
                     const hasDesktopResolution = screen.width > 800
                     const hasZeroTouchPoints = nav.maxTouchPoints === 0
+                    const hasMobileCoordinateLeak = (screen.availLeft && screen.availLeft !== 0) || 
+                                                     (screen.availTop && screen.availTop !== 0) || 
+                                                     (screen.screenX && screen.screenX !== 0) || 
+                                                     (screen.screenY && screen.screenY !== 0)
 
-                    if (hasMacGPULeak || hasDesktopGPULeak || hasMacFontLeak || hasDesktopResolution || hasZeroTouchPoints) {
+                    if (hasMacGPULeak || hasDesktopGPULeak || hasMacFontLeak || hasDesktopResolution || hasZeroTouchPoints || hasMobileCoordinateLeak) {
                         needsRegenerate = true
                         this.bot.logger.warn(
                             this.bot.isMobile,
                             'BROWSER',
-                            `Saved mobile fingerprint has low quality or leaked desktop/Mac features, regenerating...`
+                            `Saved mobile fingerprint has low quality, coordinate leaks, or leaked desktop/Mac features, regenerating...`
                         )
                     }
                 } else {

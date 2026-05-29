@@ -301,7 +301,7 @@ export class UserAgentManager {
 
         // Screen normalization
         if (fingerprint.fingerprint && fingerprint.fingerprint.screen) {
-            const screen = fingerprint.fingerprint.screen
+            const screen = fingerprint.fingerprint.screen as any
 
             // 移动端：如果 Relax 产生了桌面分辨率（宽度 > 800），则强制修正
             if (isMobile && screen.width > 800) {
@@ -326,6 +326,14 @@ export class UserAgentManager {
                 screen.pixelDepth = 24
                 screen.hasHDR = false
                 
+                // 强制重置屏幕坐标偏移量，防止宿主机/多显示器坐标泄露（真实安卓环境 screenX/availLeft 恒等于 0）
+                screen.availLeft = 0
+                screen.availTop = 0
+                screen.screenX = 0
+                screen.screenY = 0
+                screen.pageXOffset = 0
+                screen.pageYOffset = 0
+                
                 // 强制将所有可用和外部维度锁定为移动端物理尺寸，彻底杜绝 availWidth/outerWidth 留下 1366/768 遗留值的低级错误
                 screen.availWidth = screen.width
                 screen.availHeight = screen.availHeight && screen.availHeight <= screen.height ? screen.availHeight : Math.floor(screen.height * 0.9)
@@ -341,6 +349,14 @@ export class UserAgentManager {
                 screen.colorDepth = 24
                 screen.pixelDepth = 24
                 screen.hasHDR = false
+                
+                // 桌面端也对齐为主显示器原点，防止多显示器坐标偏移泄露
+                screen.availLeft = 0
+                screen.availTop = 0
+                screen.screenX = screen.screenX && screen.screenX >= 0 && screen.screenX < screen.width ? screen.screenX : 0
+                screen.screenY = screen.screenY && screen.screenY >= 0 && screen.screenY < screen.height ? screen.screenY : 0
+                screen.pageXOffset = 0
+                screen.pageYOffset = 0
                 
                 screen.availWidth = screen.availWidth || screen.width
                 screen.availHeight = screen.availHeight || screen.height
