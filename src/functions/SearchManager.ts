@@ -3,6 +3,7 @@ import type { BrowserFingerprintWithHeaders } from 'fingerprint-generator'
 import { MicrosoftRewardsBot, executionContext } from '../index'
 import type { DashboardData } from '../interface/DashboardData'
 import type { Account } from '../interface/Account'
+import { EdgeBrowsingReporter } from './activities/edge/EdgeBrowsing'
 
 interface BrowserSession {
     context: BrowserContext
@@ -477,12 +478,16 @@ export class SearchManager {
         )
 
         return await executionContext.run({ isMobile: false, accountEmail }, async () => {
+            let edgeBrowsingReporter: EdgeBrowsingReporter | null = null
             try {
                 this.bot.logger.info(
                     'main',
                     'SEARCH-DESKTOP-PARALLEL',
                     `Search start | target=${missingSearchPoints.desktopPoints}`
                 )
+                edgeBrowsingReporter = this.createEdgeBrowsingReporter(desktopSession)
+                await edgeBrowsingReporter.start()
+
                 const pointsEarned = await this.bot.activities.doSearch(data, this.bot.mainDesktopPage, false)
 
                 this.bot.logger.info(
@@ -508,6 +513,10 @@ export class SearchManager {
                 }
                 return 0
             } finally {
+                if (edgeBrowsingReporter) {
+                    await edgeBrowsingReporter.stop()
+                }
+
                 this.bot.logger.info('main', 'SEARCH-DESKTOP-PARALLEL', 'Closing desktop session')
                 this.bot.logger.debug('main', 'SEARCH-DESKTOP-PARALLEL', `Closing context | account=${accountEmail}`)
                 try {
@@ -552,6 +561,7 @@ export class SearchManager {
             }
 
             let desktopSession: BrowserSession | null = null
+            let edgeBrowsingReporter: EdgeBrowsingReporter | null = null
             try {
                 this.bot.logger.info('main', 'SEARCH-DESKTOP-SEQUENTIAL', 'Init desktop session')
                 desktopSession = await this.createDesktopSession(account, accountEmail)
@@ -561,6 +571,9 @@ export class SearchManager {
                     'SEARCH-DESKTOP-SEQUENTIAL',
                     `Search start | target=${missingSearchPoints.desktopPoints}`
                 )
+
+                edgeBrowsingReporter = this.createEdgeBrowsingReporter(desktopSession)
+                await edgeBrowsingReporter.start()
 
                 const pointsEarned = await this.bot.activities.doSearch(data, this.bot.mainDesktopPage, false)
 
@@ -587,6 +600,10 @@ export class SearchManager {
                 }
                 return 0
             } finally {
+                if (edgeBrowsingReporter) {
+                    await edgeBrowsingReporter.stop()
+                }
+
                 if (desktopSession) {
                     this.bot.logger.info('main', 'SEARCH-DESKTOP-SEQUENTIAL', 'Closing desktop session')
                     this.bot.logger.debug(
@@ -610,5 +627,10 @@ export class SearchManager {
                 }
             }
         })
+    }
+
+    private createEdgeBrowsingReporter(desktopSession: BrowserSession): EdgeBrowsingReporter {
+        const userAgent = desktopSession.fingerprint?.fingerprint?.navigator?.userAgent
+        return new EdgeBrowsingReporter(this.bot, { userAgent })
     }
 }

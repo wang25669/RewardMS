@@ -13,6 +13,7 @@
         "doAppPromotions": true,
         "doDesktopSearch": true,
         "doMobileSearch": true,
+        "doEdgeBrowsing": true,
         "doDailyCheckIn": true,
         "doReadToEarn": true
     },

@@ -67,6 +67,7 @@ export const ConfigSchema = z.object({
         doAppPromotions: z.boolean(),
         doDesktopSearch: z.boolean(),
         doMobileSearch: z.boolean(),
+        doEdgeBrowsing: z.boolean().optional().default(true),
         doDailyCheckIn: z.boolean(),
         doReadToEarn: z.boolean()
     }),
