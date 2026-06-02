@@ -36,7 +36,7 @@ export class ClaimablePoints extends Workers {
             await page.goto(this.dashboardUrl, { waitUntil: 'domcontentloaded', timeout: 25000 })
             reachedDashboard = true
             await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
-            await this.bot.browser.utils.tryDismissAllMessages(page)
+            await this.dismissBlockingMessages(page)
             await this.bot.utils.wait(1500)
 
             const opened = await this.openClaimablePanel(page)
@@ -82,6 +82,24 @@ export class ClaimablePoints extends Workers {
         } finally {
             if (reachedDashboard) {
                 this.saveState(statePath)
+            }
+        }
+    }
+
+    private async dismissBlockingMessages(page: Page): Promise<void> {
+        const selectors = [
+            '#acceptButton',
+            '#wcpConsentBannerCtrl > * > button:first-child',
+            '#bnp_btn_accept',
+            '#bnp_btn_reject',
+            'button[aria-label*="Reject" i]'
+        ]
+
+        for (const selector of selectors) {
+            const locator = page.locator(selector).first()
+            if (await locator.isVisible({ timeout: 500 }).catch(() => false)) {
+                await locator.click({ timeout: 3000 }).catch(() => {})
+                await this.bot.utils.wait(250)
             }
         }
     }
