@@ -104,31 +104,33 @@ Edit `src/config.json` to customize behavior. Below are all currently available 
 
 ### Workers
 
-| Setting                       | Type    | Default | Description                 |
-| ----------------------------- | ------- | ------- | --------------------------- |
-| `workers.doDailySet`          | boolean | `true`  | Complete daily set          |
-| `workers.doSpecialPromotions` | boolean | `true`  | Complete special promotions |
-| `workers.doMorePromotions`    | boolean | `true`  | Complete more promotions    |
-| `workers.doPunchCards`        | boolean | `true`  | Complete punchcards (WIP)   |
-| `workers.doAppPromotions`     | boolean | `true`  | Complete app promotions     |
-| `workers.doDesktopSearch`     | boolean | `true`  | Perform desktop searches    |
-| `workers.doMobileSearch`      | boolean | `true`  | Perform mobile searches     |
-| `workers.doDailyCheckIn`      | boolean | `true`  | Complete daily check-in     |
-| `workers.doReadToEarn`        | boolean | `true`  | Complete Read-to-Earn       |
+| Setting                       | Type    | Default | Description                            |
+| ----------------------------- | ------- | ------- | ---------------------------------      |
+| `workers.doDailySet`          | boolean | `true`  | Complete daily set                     |
+| `workers.doSpecialPromotions` | boolean | `true`  | Complete special promotions            |
+| `workers.doMorePromotions`    | boolean | `true`  | Complete more promotions               |
+| `workers.doPunchCards`        | boolean | `true`  | Complete punchcards (WIP)              |
+| `workers.doAppPromotions`     | boolean | `true`  | Complete app promotions                |
+| `workers.doDesktopSearch`     | boolean | `true`  | Perform desktop searches               |
+| `workers.doMobileSearch`      | boolean | `true`  | Perform mobile searches                |
+| `workers.doEdgeBrowsing`      | boolean | `true`  | Complete EdgeBrowsing(30m)             |
+| `workers.doClaimablePoints`   | boolean | `true`  | Complete ClaimablePoints(3day)         |
+| `workers.doDailyCheckIn`      | boolean | `true`  | Complete daily check-in(103)           |
+| `workers.doReadToEarn`        | boolean | `true`  | Complete Read-to-Earn                  |
 
 ### Search Settings
 
-| Setting                                | Type     | Default                                      | Description                         |
-| -------------------------------------- | -------- | -------------------------------------------- | ----------------------------------- |
-| `searchSettings.scrollRandomResults`   | boolean  | `false`                                      | Scroll randomly on results          |
-| `searchSettings.clickRandomResults`    | boolean  | `false`                                      | Click random links                  |
-| `searchSettings.parallelSearching`     | boolean  | `true`                                       | Run searches in parallel            |
-| `searchSettings.queryEngines`          | string[] | `["google", "wikipedia", "reddit", "local"]` | Query engines to use                |
-| `searchSettings.searchResultVisitTime` | string   | `"10sec"`                                    | Time to spend on each search result |
-| `searchSettings.searchDelay.min`       | string   | `"30sec"`                                    | Minimum delay between searches      |
-| `searchSettings.searchDelay.max`       | string   | `"1min"`                                     | Maximum delay between searches      |
-| `searchSettings.readDelay.min`         | string   | `"30sec"`                                    | Minimum delay for reading           |
-| `searchSettings.readDelay.max`         | string   | `"1min"`                                     | Maximum delay for reading           |
+| Setting                                | Type     | Default                       | Description                         |
+| -------------------------------------- | -------- | ----------------------------- | ----------------------------------- |
+| `searchSettings.scrollRandomResults`   | boolean  | `false`                       | Scroll randomly on results          |
+| `searchSettings.clickRandomResults`    | boolean  | `false`                       | Click random links                  |
+| `searchSettings.parallelSearching`     | boolean  | `true`                        | Run searches in parallel            |
+| `searchSettings.queryEngines`          | string[] | `["baidu", "local"]`          | Query engines to use                |
+| `searchSettings.searchResultVisitTime` | string   | `"10sec"`                     | Time to spend on each search result |
+| `searchSettings.searchDelay.min`       | string   | `"30sec"`                     | Minimum delay between searches      |
+| `searchSettings.searchDelay.max`       | string   | `"1min"`                      | Maximum delay between searches      |
+| `searchSettings.readDelay.min`         | string   | `"30sec"`                     | Minimum delay for reading           |
+| `searchSettings.readDelay.max`         | string   | `"1min"`                      | Maximum delay for reading           |
 
 ### Logging
 
