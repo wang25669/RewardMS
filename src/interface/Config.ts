@@ -45,6 +45,7 @@ export interface ConfigWorkers {
     doDesktopSearch: boolean
     doMobileSearch: boolean
     doEdgeBrowsing?: boolean
+    doClaimablePoints?: boolean
     doDailyCheckIn: boolean
     doReadToEarn: boolean
 }

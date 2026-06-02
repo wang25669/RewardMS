@@ -525,6 +525,10 @@ export class MicrosoftRewardsBot {
                     } | App: ${appEarnable?.totalEarnablePoints ?? 0} | ${accountEmail} | locale: ${this.userData.geoLocale}`
                 )
 
+                if (this.config.workers.doClaimablePoints !== false) {
+                    await this.activities.doClaimablePoints(this.mainMobilePage, account)
+                }
+
                 if (this.config.workers.doAppPromotions) await this.workers.doAppPromotions(appData)
 
                 // Desktop Dashboard 相关任务（仅当 API 可用时执行）

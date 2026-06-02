@@ -68,6 +68,7 @@ export const ConfigSchema = z.object({
         doDesktopSearch: z.boolean(),
         doMobileSearch: z.boolean(),
         doEdgeBrowsing: z.boolean().optional().default(true),
+        doClaimablePoints: z.boolean().optional().default(true),
         doDailyCheckIn: z.boolean(),
         doReadToEarn: z.boolean()
     }),

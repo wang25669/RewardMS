@@ -15,6 +15,7 @@ import { DoubleSearchPoints } from './activities/api/DoubleSearchPoints'
 // Browser
 import { SearchOnBing } from './activities/browser/SearchOnBing'
 import { Search } from './activities/browser/Search'
+import { ClaimablePoints } from './activities/browser/ClaimablePoints'
 
 import type {
     BasePromotion,
@@ -23,6 +24,7 @@ import type {
     PurplePromotionalItem
 } from '../interface/DashboardData'
 import type { Promotion } from '../interface/AppDashBoardData'
+import type { Account } from '../interface/Account'
 
 export default class Activities {
     private bot: MicrosoftRewardsBot
@@ -40,6 +42,11 @@ export default class Activities {
     doSearchOnBing = async (promotion: BasePromotion, page: Page): Promise<void> => {
         const searchOnBing = new SearchOnBing(this.bot)
         await searchOnBing.doSearchOnBing(promotion, page)
+    }
+
+    doClaimablePoints = async (page: Page, account: Account): Promise<void> => {
+        const claimablePoints = new ClaimablePoints(this.bot)
+        await claimablePoints.doClaimablePoints(page, account)
     }
 
     /*
