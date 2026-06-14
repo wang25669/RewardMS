@@ -4,10 +4,6 @@ import type { Page } from 'patchright'
 
 export async function errorDiagnostic(page: Page, error: Error): Promise<void> {
     try {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const folderName = `error-${timestamp}`
-        const outputDir = path.join(process.cwd(), 'diagnostics', folderName)
-
         if (!page) {
             return
         }
@@ -15,6 +11,10 @@ export async function errorDiagnostic(page: Page, error: Error): Promise<void> {
         if (page.isClosed()) {
             return
         }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const folderName = `error-${timestamp}`
+        const outputDir = path.join(process.cwd(), 'diagnostics', folderName)
 
         // Error log content
         const errorLog = `
@@ -27,20 +27,31 @@ ${error.stack || 'No stack trace available'}
         `.trim()
 
         const [htmlContent, screenshotBuffer] = await Promise.all([
-            page.content(),
-            page.screenshot({ fullPage: true, type: 'png' })
+            page.content().catch(() => ''),
+            page.isClosed() ? null : page.screenshot({ fullPage: true, type: 'png' }).catch(() => null)
         ])
+
+        if (!htmlContent && !screenshotBuffer) {
+            return
+        }
 
         await fs.mkdir(outputDir, { recursive: true })
 
-        await Promise.all([
+        const writes = [
             fs.writeFile(path.join(outputDir, 'dump.html'), htmlContent),
-            fs.writeFile(path.join(outputDir, 'screenshot.png'), screenshotBuffer),
             fs.writeFile(path.join(outputDir, 'error.txt'), errorLog)
-        ])
+        ]
+
+        if (screenshotBuffer) {
+            writes.push(fs.writeFile(path.join(outputDir, 'screenshot.png'), screenshotBuffer))
+        }
+
+        await Promise.all(writes)
 
         console.log(`Diagnostics saved to: ${outputDir}`)
     } catch (error) {
-        console.error('Unable to create error diagnostics:', error)
+        console.warn(
+            `Unable to create error diagnostics: ${error instanceof Error ? error.message : String(error)}`
+        )
     }
 }

@@ -4,8 +4,9 @@ services:
         image: ghcr.io/wang25669/rewardms:latest
         container_name: rewardms
         restart: unless-stopped
-        shm_size: "256m"
-
+        shm_size: "512m"
+        deploy:
+        resources:
         # Create and customize your accounts.json and config.json prior to deploying the container (default location: /src/)
         volumes:
             - ./src/accounts.json:/usr/src/microsoft-rewards-script/dist/accounts.json:ro

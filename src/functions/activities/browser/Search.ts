@@ -9,6 +9,8 @@ export class Search extends Workers {
     private searchPageURL = ''
     private searchCount = 0
     private readonly refreshThreshold = 5
+    private readonly gotoTimeout = 30000
+    private readonly refreshMaxAttempts = 2
 
     public async doSearch(data: DashboardData, page: Page, isMobile: boolean): Promise<number> {
         const startBalance = Number(this.bot.userData.currentPoints ?? 0)
@@ -60,8 +62,16 @@ export class Search extends Workers {
             const targetUrl = this.searchPageURL ? this.searchPageURL : this.bingHome
             this.bot.logger.debug(isMobile, 'SEARCH-BING', `Navigating to search page | url=${targetUrl}`)
 
-            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
-            await this.bot.browser.utils.tryDismissAllMessages(page)
+            try {
+                await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: this.gotoTimeout })
+                await this.bot.browser.utils.tryDismissAllMessages(page)
+            } catch (error) {
+                this.bot.logger.warn(
+                    isMobile,
+                    'SEARCH-BING',
+                    `Initial search page navigation failed; continuing with retryable search loop | url=${targetUrl} | message=${error instanceof Error ? error.message : String(error)}`
+                )
+            }
 
             let stagnantLoop = 0
             const stagnantLoopMax = 10
@@ -265,16 +275,7 @@ export class Search extends Workers {
         const maxAttempts = 5
 
         this.searchCount++
-
-        if (this.searchCount % this.refreshThreshold === 0) {
-            this.bot.logger.info(
-                isMobile,
-                'SEARCH-BING',
-                `Refreshing search page to clear accumulated page context | count=${this.searchCount} | threshold=${this.refreshThreshold}`
-            )
-
-            searchPage = await this.refreshSearchPage(searchPage, isMobile)
-        }
+        let periodicRefreshPending = this.searchCount % this.refreshThreshold === 0
 
         this.bot.logger.debug(
             isMobile,
@@ -284,6 +285,17 @@ export class Search extends Workers {
 
         for (let i = 0; i < maxAttempts; i++) {
             try {
+                if (periodicRefreshPending) {
+                    this.bot.logger.info(
+                        isMobile,
+                        'SEARCH-BING',
+                        `Refreshing search page to clear accumulated page context | count=${this.searchCount} | threshold=${this.refreshThreshold} | attempt=${i + 1}/${maxAttempts}`
+                    )
+
+                    searchPage = await this.refreshSearchPage(searchPage, isMobile)
+                    periodicRefreshPending = false
+                }
+
                 const searchBar = '#sb_form_q'
                 const searchBox = searchPage.locator(searchBar)
 
@@ -351,11 +363,11 @@ export class Search extends Workers {
 
                 return counters
             } catch (error) {
-                if (i >= 5) {
+                if (i >= maxAttempts - 1) {
                     this.bot.logger.error(
                         isMobile,
                         'SEARCH-BING',
-                        `Failed after 5 retries | query="${query}" | message=${error instanceof Error ? error.message : String(error)}`
+                        `Failed after ${maxAttempts} retries | query="${query}" | message=${error instanceof Error ? error.message : String(error)}`
                     )
                     break
                 }
@@ -381,7 +393,15 @@ export class Search extends Workers {
                     `Navigating to Bing home before retry | attempt=${i + 1}/${maxAttempts}`
                 )
 
-                searchPage = await this.refreshSearchPage(searchPage, isMobile)
+                try {
+                    searchPage = await this.refreshSearchPage(searchPage, isMobile)
+                } catch (refreshError) {
+                    this.bot.logger.warn(
+                        isMobile,
+                        'SEARCH-BING',
+                        `Refresh before retry failed; keeping current page | attempt=${i + 1}/${maxAttempts} | message=${refreshError instanceof Error ? refreshError.message : String(refreshError)}`
+                    )
+                }
 
                 this.bot.logger.warn(
                     isMobile,
@@ -418,9 +438,30 @@ export class Search extends Workers {
         this.bot.logger.debug(isMobile, 'SEARCH-BING', 'Navigating to about:blank before returning home')
         await activePage.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {})
 
-        this.bot.logger.debug(isMobile, 'SEARCH-BING', `Returning home to refresh state | url=${this.bingHome}`)
-        await activePage.goto(this.bingHome, { waitUntil: 'domcontentloaded', timeout: 15000 })
-        await this.bot.browser.utils.tryDismissAllMessages(activePage)
+        for (let attempt = 1; attempt <= this.refreshMaxAttempts; attempt++) {
+            try {
+                this.bot.logger.debug(
+                    isMobile,
+                    'SEARCH-BING',
+                    `Returning home to refresh state | url=${this.bingHome} | refreshAttempt=${attempt}/${this.refreshMaxAttempts}`
+                )
+                await activePage.goto(this.bingHome, { waitUntil: 'domcontentloaded', timeout: this.gotoTimeout })
+                await this.bot.browser.utils.tryDismissAllMessages(activePage)
+
+                return activePage
+            } catch (error) {
+                this.bot.logger.warn(
+                    isMobile,
+                    'SEARCH-BING',
+                    `Refresh navigation failed | refreshAttempt=${attempt}/${this.refreshMaxAttempts} | url=${this.bingHome} | message=${error instanceof Error ? error.message : String(error)}`
+                )
+
+                if (attempt < this.refreshMaxAttempts) {
+                    await this.bot.utils.wait(this.bot.utils.randomDelay(2000, 5000))
+                    await activePage.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {})
+                }
+            }
+        }
 
         return activePage
     }
@@ -466,7 +507,7 @@ export class Search extends Workers {
             await this.bot.utils.wait(visitTime)
 
             if (isMobile) {
-                await page.goto(searchPageUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
+                await page.goto(searchPageUrl, { waitUntil: 'domcontentloaded', timeout: this.gotoTimeout })
                 this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', 'Navigated back to search page')
             } else {
                 const newTab = await this.bot.browser.utils.getLatestTab(page)
