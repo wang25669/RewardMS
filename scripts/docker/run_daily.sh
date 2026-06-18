@@ -7,6 +7,8 @@ export TZ="${TZ:-UTC}"
 cd /usr/src/microsoft-rewards-script
 
 LOCKFILE=/tmp/run_daily.lock
+RUN_TIMEOUT_HOURS=${STUCK_PROCESS_TIMEOUT_HOURS:-8}
+RUN_TIMEOUT_SECONDS=$((RUN_TIMEOUT_HOURS * 3600))
 
 # -------------------------------
 #  Function: Check and fix lockfile integrity
@@ -45,8 +47,6 @@ self_heal_lockfile() {
 acquire_lock() {
     local max_attempts=5
     local attempt=0
-    local timeout_hours=${STUCK_PROCESS_TIMEOUT_HOURS:-8}
-    local timeout_seconds=$((timeout_hours * 3600))
 
     while [ $attempt -lt $max_attempts ]; do
         # Try to create lock with current PID
@@ -79,8 +79,8 @@ acquire_lock() {
             # Check process runtime → kill if exceeded timeout
             local process_age
             if process_age=$(ps -o etimes= -p "$existing_pid" 2>/dev/null | tr -d ' '); then
-                if [ "$process_age" -gt "$timeout_seconds" ]; then
-                    echo "[$(date)] [run_daily.sh] Killing stuck process $existing_pid (${process_age}s > ${timeout_hours}h)"
+                if [ "$process_age" -gt "$RUN_TIMEOUT_SECONDS" ]; then
+                    echo "[$(date)] [run_daily.sh] Killing stuck process $existing_pid (${process_age}s > ${RUN_TIMEOUT_HOURS}h)"
                     kill -TERM "$existing_pid" 2>/dev/null || true
                     sleep 5
                     kill -KILL "$existing_pid" 2>/dev/null || true
@@ -116,6 +116,18 @@ release_lock() {
 # Always release lock on exit — but only if we acquired it
 trap 'release_lock' EXIT INT TERM
 
+run_script_with_timeout() {
+    echo "[$(date)] [run_daily.sh] Run timeout: ${RUN_TIMEOUT_HOURS}h (${RUN_TIMEOUT_SECONDS}s)"
+
+    if command -v timeout >/dev/null 2>&1; then
+        timeout -k 30s "${RUN_TIMEOUT_SECONDS}s" npm start
+        return $?
+    fi
+
+    echo "[$(date)] [run_daily.sh] WARNING: 'timeout' command not found; running without active timeout." >&2
+    npm start
+}
+
 # -------------------------------
 #  MAIN EXECUTION FLOW
 # -------------------------------
@@ -145,10 +157,15 @@ fi
 
 # Start the actual script
 echo "[$(date)] [run_daily.sh] Starting script..."
-if npm start; then
+if run_script_with_timeout; then
     echo "[$(date)] [run_daily.sh] Script completed successfully."
 else
-    echo "[$(date)] [run_daily.sh] ERROR: Script failed!" >&2
+    exit_code=$?
+    if [ "$exit_code" -eq 124 ] || [ "$exit_code" -eq 137 ]; then
+        echo "[$(date)] [run_daily.sh] ERROR: Script timed out after ${RUN_TIMEOUT_HOURS}h." >&2
+    else
+        echo "[$(date)] [run_daily.sh] ERROR: Script failed with exit code $exit_code!" >&2
+    fi
 fi
 
 echo "[$(date)] [run_daily.sh] Script finished"

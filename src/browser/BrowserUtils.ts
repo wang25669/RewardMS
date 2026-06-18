@@ -6,6 +6,7 @@ import type { MicrosoftRewardsBot } from '../index'
 
 export default class BrowserUtils {
     private bot: MicrosoftRewardsBot
+    private readonly ghostClickTimeoutMs = 15000
 
     constructor(bot: MicrosoftRewardsBot) {
         this.bot = bot
@@ -223,14 +224,18 @@ export default class BrowserUtils {
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'GHOST-CLICK',
-                `Trying to click selector: ${selector}, options: ${JSON.stringify(options)}`
+                `Trying to click selector: ${selector}, options: ${JSON.stringify(options)}, timeout=${this.ghostClickTimeoutMs}ms`
             )
 
             // Wait for selector to exist before clicking
             await page.waitForSelector(selector, { timeout: 1000 }).catch(() => {})
 
             const cursor = createCursor(page as any)
-            await cursor.click(selector, options)
+            await this.withTimeout(
+                cursor.click(selector, options),
+                this.ghostClickTimeoutMs,
+                `ghostClick timeout after ${this.ghostClickTimeoutMs}ms`
+            )
 
             return true
         } catch (error) {
@@ -240,6 +245,21 @@ export default class BrowserUtils {
                 `Failed for ${selector}: ${error instanceof Error ? error.message : String(error)}`
             )
             return false
+        }
+    }
+
+    private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+        let timeoutId: ReturnType<typeof setTimeout> | undefined
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
+        })
+
+        try {
+            return await Promise.race([promise, timeoutPromise])
+        } finally {
+            if (timeoutId) {
+                clearTimeout(timeoutId)
+            }
         }
     }
 
