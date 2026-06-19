@@ -231,11 +231,17 @@ export default class BrowserUtils {
             await page.waitForSelector(selector, { timeout: 1000 }).catch(() => {})
 
             const cursor = createCursor(page as any)
-            await this.withTimeout(
-                cursor.click(selector, options),
-                this.ghostClickTimeoutMs,
-                `ghostClick timeout after ${this.ghostClickTimeoutMs}ms`
-            )
+            const clickPromise = cursor.click(selector, options)
+
+            clickPromise.catch(error => {
+                this.bot.logger.debug(
+                    this.bot.isMobile,
+                    'GHOST-CLICK',
+                    `Late click failure for ${selector}: ${error instanceof Error ? error.message : String(error)}`
+                )
+            })
+
+            await this.withTimeout(clickPromise, this.ghostClickTimeoutMs, `ghostClick timeout after ${this.ghostClickTimeoutMs}ms`)
 
             return true
         } catch (error) {
