@@ -319,10 +319,36 @@ export class Search extends Workers {
                 }
 
                 await this.bot.utils.wait(1000)
-                const clickedSearchBox = await this.bot.browser.utils.ghostClick(searchPage, searchBar, { clickCount: 3 })
-                if (!clickedSearchBox) {
-                    throw new Error('Search box click failed or timed out')
+
+                try {
+                    await searchBox.click({ clickCount: 3, timeout: 10000 })
+                } catch (clickError) {
+                    const focused = await searchPage
+                        .evaluate((selector: string) => {
+                            const input = document.querySelector<HTMLInputElement>(selector)
+                            if (!input) {
+                                return false
+                            }
+
+                            input.focus()
+                            input.select()
+                            return document.activeElement === input
+                        }, searchBar)
+                        .catch(() => false)
+
+                    if (!focused) {
+                        throw new Error(
+                            `Search box focus failed | message=${clickError instanceof Error ? clickError.message : String(clickError)}`
+                        )
+                    }
+
+                    this.bot.logger.warn(
+                        isMobile,
+                        'SEARCH-BING',
+                        `Search box click failed; focused via DOM fallback | message=${clickError instanceof Error ? clickError.message : String(clickError)}`
+                    )
                 }
+
                 await searchBox.fill('')
 
                 await searchPage.keyboard.type(query, { delay: 50 })

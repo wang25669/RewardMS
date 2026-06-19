@@ -613,6 +613,25 @@ export class MicrosoftRewardsBot {
 
 export { executionContext }
 
+function isRecoverableLateBrowserRejection(reason: unknown): boolean {
+    const message = reason instanceof Error ? reason.message : String(reason)
+    const stack = reason instanceof Error ? (reason.stack ?? '') : ''
+    const details = `${message}\n${stack}`
+
+    const staleContextError =
+        message.includes('Cannot find context with specified id') ||
+        message.includes('Execution context was destroyed') ||
+        message.includes('Target page, context or browser has been closed')
+
+    const fromBrowserProtocol =
+        details.includes('patchright-core') ||
+        details.includes('DOM.describeNode') ||
+        details.includes('FrameExecutionContext') ||
+        details.includes('ElementHandle')
+
+    return staleContextError && fromBrowserProtocol
+}
+
 async function main(): Promise<void> {
     // Check before doing anything
     checkNodeVersion()
@@ -637,6 +656,15 @@ async function main(): Promise<void> {
         process.exit(1)
     })
     process.on('unhandledRejection', async reason => {
+        if (isRecoverableLateBrowserRejection(reason)) {
+            rewardsBot.logger.warn(
+                'main',
+                'UNHANDLED-REJECTION',
+                `Suppressed recoverable late browser protocol error: ${reason instanceof Error ? reason.message : String(reason)}`
+            )
+            return
+        }
+
         rewardsBot.logger.error('main', 'UNHANDLED-REJECTION', reason as Error)
         await flushAllWebhooks()
         process.exit(1)
