@@ -9,6 +9,7 @@ cd /usr/src/microsoft-rewards-script
 LOCKFILE=/tmp/run_daily.lock
 RUN_TIMEOUT_HOURS=${STUCK_PROCESS_TIMEOUT_HOURS:-8}
 RUN_TIMEOUT_SECONDS=$((RUN_TIMEOUT_HOURS * 3600))
+RESTART_ON_TIMEOUT=${RESTART_CONTAINER_ON_TIMEOUT:-true}
 
 # -------------------------------
 #  Function: Check and fix lockfile integrity
@@ -128,6 +129,32 @@ run_script_with_timeout() {
     npm start
 }
 
+request_container_restart() {
+    if [ "$RESTART_ON_TIMEOUT" != "true" ]; then
+        echo "[$(date)] [run_daily.sh] Container restart on timeout disabled (RESTART_CONTAINER_ON_TIMEOUT=$RESTART_ON_TIMEOUT)."
+        return 0
+    fi
+
+    echo "[$(date)] [run_daily.sh] Timeout reached before all tasks completed; requesting container restart." >&2
+    release_lock
+
+    local pid1_name
+    pid1_name=$(cat /proc/1/comm 2>/dev/null || echo "unknown")
+    echo "[$(date)] [run_daily.sh] Sending TERM to PID 1 ($pid1_name) so Docker restart policy can restart the container." >&2
+
+    kill -TERM 1 2>/dev/null || {
+        echo "[$(date)] [run_daily.sh] WARNING: Failed to send TERM to PID 1." >&2
+        return 1
+    }
+
+    sleep 10
+
+    if kill -0 1 2>/dev/null; then
+        echo "[$(date)] [run_daily.sh] PID 1 still alive after TERM; sending KILL." >&2
+        kill -KILL 1 2>/dev/null || true
+    fi
+}
+
 # -------------------------------
 #  MAIN EXECUTION FLOW
 # -------------------------------
@@ -163,6 +190,7 @@ else
     exit_code=$?
     if [ "$exit_code" -eq 124 ] || [ "$exit_code" -eq 137 ]; then
         echo "[$(date)] [run_daily.sh] ERROR: Script timed out after ${RUN_TIMEOUT_HOURS}h." >&2
+        request_container_restart
     else
         echo "[$(date)] [run_daily.sh] ERROR: Script failed with exit code $exit_code!" >&2
     fi

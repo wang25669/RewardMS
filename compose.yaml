@@ -5,8 +5,7 @@ services:
         container_name: rewardms
         restart: unless-stopped
         shm_size: "512m"
-        deploy:
-        resources:
+
         # Create and customize your accounts.json and config.json prior to deploying the container (default location: /src/)
         volumes:
             - ./src/accounts.json:/usr/src/microsoft-rewards-script/dist/accounts.json:ro
@@ -26,6 +25,7 @@ services:
 
             # Set a timeout for stuck script runs (default: 8h, uncomment to customize)
             STUCK_PROCESS_TIMEOUT_HOURS: "8"
+            RESTART_CONTAINER_ON_TIMEOUT: "true"
 
         # Health check: ensures cron is running, container marked unhealthy if cron stops
         healthcheck:
